@@ -1,0 +1,67 @@
+import type { PlantState, Vec3Like } from '../../shared/types';
+import { lightBand } from '../climate/light';
+import { plantWaterFactor } from './water';
+
+export interface GrowthDeps {
+  light: number;
+  soilWater: number;
+  dtDays: number;
+}
+
+/**
+ * Update plant age/health/growth from local light and water.
+ * Long exposure (hot day or long night) slowly stresses plants.
+ */
+export function updatePlant(plant: PlantState, deps: GrowthDeps): void {
+  const { light, soilWater, dtDays } = deps;
+  const band = lightBand(light);
+  const water = plantWaterFactor(plant, soilWater);
+  plant.water = water;
+
+  plant.age += dtDays;
+
+  const idealWater = plant.species === 'tree' ? 0.35 : 0.25;
+  const waterStress = Math.abs(water - idealWater);
+
+  if (band === 'day') {
+    const growthPush = light * (0.35 + water * 0.65) - waterStress * 0.4;
+    plant.growth = Math.min(1, Math.max(0, plant.growth + growthPush * dtDays * 0.55));
+    plant.health = Math.min(1, plant.health + (water > 0.2 ? 0.08 : -0.12) * dtDays);
+  } else if (band === 'dusk') {
+    plant.growth = Math.min(1, plant.growth + 0.04 * water * dtDays);
+    plant.health = Math.min(1, plant.health + 0.02 * dtDays);
+  } else {
+    // Night: mostly rest; prolonged darkness + dryness damages slowly
+    plant.growth = Math.max(0, plant.growth - 0.01 * (1 - water) * dtDays);
+    plant.health = Math.min(1, plant.health - 0.02 * (1 - water) * dtDays);
+  }
+
+  // Drought if very dry during strong sun
+  if (light > 0.55 && water < 0.12) {
+    plant.health = Math.max(0, plant.health - 0.25 * dtDays);
+    plant.growth = Math.max(0, plant.growth - 0.08 * dtDays);
+  }
+
+  plant.health = Math.min(1, Math.max(0, plant.health));
+}
+
+/** Nearby grass-like forage amount for animals. */
+export function forageAt(plants: PlantState[], target: Vec3Like, radiusRad: number): PlantState | null {
+  let best: PlantState | null = null;
+  let bestDist = radiusRad;
+  for (const p of plants) {
+    if (p.species === 'tree') continue;
+    if (p.growth < 0.15 || p.health < 0.2) continue;
+    const d = angDist(p.position.normal, target);
+    if (d < bestDist) {
+      bestDist = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
+function angDist(a: Vec3Like, b: Vec3Like): number {
+  const d = Math.min(1, Math.max(-1, a.x * b.x + a.y * b.y + a.z * b.z));
+  return Math.acos(d);
+}

@@ -1,0 +1,181 @@
+import type { AnimalState, PlantState, Vec3Like } from '../../shared/types';
+import {
+  addScaled,
+  copyV3,
+  cross,
+  dot,
+  normalize,
+  projectOnPlane,
+  v3,
+} from '../../shared/math';
+import { lightBand } from '../climate/light';
+import { forageAt } from '../ecology/growth';
+
+const WALK_SPEED = 0.22; // radians of surface per second (game time)
+const DECISION_INTERVAL = 0.35;
+const tmpA = v3();
+const tmpB = v3();
+const tmpC = v3();
+
+export function updateRabbit(
+  rabbit: AnimalState,
+  plants: PlantState[],
+  light: number,
+  dt: number,
+  decisionClock: number,
+): void {
+  rabbit.hopPhase += dt * 8;
+  rabbit.hunger = Math.min(1, rabbit.hunger + dt * 0.04);
+
+  const band = lightBand(light);
+
+  // Low-rate behavior decisions
+  if (decisionClock <= 0) {
+    decide(rabbit, plants, band);
+  }
+
+  // Always move / act
+  switch (rabbit.state) {
+    case 'wander':
+      wanderMove(rabbit, dt);
+      rabbit.hunger = Math.min(1, rabbit.hunger + 0);
+      break;
+    case 'seekFood': {
+      const target = findPlant(plants, rabbit.targetPlantId);
+      if (!target) {
+        rabbit.state = 'wander';
+        rabbit.targetPlantId = null;
+      } else {
+        moveToward(rabbit, target.position.normal, dt, WALK_SPEED * 1.15);
+        if (angDist(rabbit.position.normal, target.position.normal) < 0.06) {
+          rabbit.state = 'eat';
+          rabbit.stateTimer = 1.2;
+        }
+      }
+      break;
+    }
+    case 'eat': {
+      const target = findPlant(plants, rabbit.targetPlantId);
+      if (target && target.growth > 0.05) {
+        // Nibble plant
+        const bite = Math.min(target.growth, dt * 0.25);
+        target.growth = Math.max(0, target.growth - bite);
+        rabbit.hunger = Math.max(0, rabbit.hunger - dt * 0.35);
+      }
+      rabbit.stateTimer -= dt;
+      if (rabbit.stateTimer <= 0 || rabbit.hunger < 0.25) {
+        rabbit.state = 'wander';
+        rabbit.targetPlantId = null;
+      }
+      break;
+    }
+    case 'sleep':
+      // Stay still at night
+      break;
+  }
+}
+
+function decide(rabbit: AnimalState, plants: PlantState[], band: 'day' | 'dusk' | 'night'): void {
+  if (band === 'night' && rabbit.hunger < 0.85) {
+    rabbit.state = 'sleep';
+    rabbit.targetPlantId = null;
+    return;
+  }
+
+  if (rabbit.state === 'sleep' && band !== 'night') {
+    rabbit.state = 'wander';
+  }
+
+  if (rabbit.state === 'eat') return;
+
+  if (rabbit.hunger > 0.4) {
+    const food = forageAt(plants, rabbit.position.normal, 1.4);
+    if (food) {
+      rabbit.state = 'seekFood';
+      rabbit.targetPlantId = food.id;
+      return;
+    }
+  }
+
+  if (rabbit.state !== 'wander') {
+    rabbit.state = 'wander';
+    rabbit.targetPlantId = null;
+  }
+}
+
+function wanderMove(rabbit: AnimalState, dt: number): void {
+  // Occasionally jitter facing
+  if (Math.random() < dt * 0.8) {
+    randomTangent(rabbit.facing, rabbit.position.normal);
+  }
+  moveAlongFacing(rabbit, dt, WALK_SPEED * 0.55);
+}
+
+function moveToward(rabbit: AnimalState, target: Vec3Like, dt: number, speed: number): void {
+  // Desired direction = target projected on tangent plane
+  copyV3(tmpA, target);
+  projectOnPlane(tmpA, tmpA, rabbit.position.normal);
+  if (Math.hypot(tmpA.x, tmpA.y, tmpA.z) < 1e-5) {
+    moveAlongFacing(rabbit, dt, speed);
+    return;
+  }
+  normalize(tmpA, tmpA);
+  // Smoothly steer facing
+  rabbit.facing.x += (tmpA.x - rabbit.facing.x) * Math.min(1, dt * 6);
+  rabbit.facing.y += (tmpA.y - rabbit.facing.y) * Math.min(1, dt * 6);
+  rabbit.facing.z += (tmpA.z - rabbit.facing.z) * Math.min(1, dt * 6);
+  normalize(rabbit.facing, rabbit.facing);
+  moveAlongFacing(rabbit, dt, speed);
+}
+
+function moveAlongFacing(rabbit: AnimalState, dt: number, speed: number): void {
+  const n = rabbit.position.normal;
+  const dir = projectOnPlane(tmpB, rabbit.facing, n);
+  if (Math.hypot(dir.x, dir.y, dir.z) < 1e-5) {
+    randomTangent(rabbit.facing, n);
+    projectOnPlane(dir, rabbit.facing, n);
+  }
+  normalize(dir, dir);
+  copyV3(rabbit.facing, dir);
+
+  // Step on sphere then renormalize
+  addScaled(tmpC, n, dir, speed * dt);
+  normalize(rabbit.position.normal, tmpC);
+  // Re-project facing onto new tangent
+  projectOnPlane(rabbit.facing, rabbit.facing, rabbit.position.normal);
+  if (Math.hypot(rabbit.facing.x, rabbit.facing.y, rabbit.facing.z) < 1e-5) {
+    randomTangent(rabbit.facing, rabbit.position.normal);
+  } else {
+    normalize(rabbit.facing, rabbit.facing);
+  }
+}
+
+function randomTangent(out: Vec3Like, normal: Vec3Like): void {
+  // Any unit vector perpendicular-ish, then project
+  const ref = Math.abs(normal.y) < 0.9 ? v3(0, 1, 0) : v3(1, 0, 0);
+  cross(out, normal, ref);
+  projectOnPlane(out, out, normal);
+  if (Math.hypot(out.x, out.y, out.z) < 1e-5) {
+    cross(out, normal, v3(0, 0, 1));
+    projectOnPlane(out, out, normal);
+  }
+  normalize(out, out);
+  // Random flip
+  if (Math.random() < 0.5) {
+    out.x *= -1;
+    out.y *= -1;
+    out.z *= -1;
+  }
+}
+
+function findPlant(plants: PlantState[], id: string | null): PlantState | null {
+  if (!id) return null;
+  return plants.find((p) => p.id === id) ?? null;
+}
+
+function angDist(a: Vec3Like, b: Vec3Like): number {
+  const d = Math.min(1, Math.max(-1, dot(a, b)));
+  return Math.acos(d);
+}
+
+export const RABBIT_DECISION_INTERVAL = DECISION_INTERVAL;
