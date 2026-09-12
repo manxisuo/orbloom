@@ -82,6 +82,7 @@ onMounted(async () => {
     seed: 42,
     boot: loadedWorld ? { kind: 'loaded', world: loadedWorld } : { kind: 'new', seed: 42 },
     saveRepository: repo,
+    onNotify: (msg) => store.flash(msg),
   });
 
   game.setTool(store.tool);

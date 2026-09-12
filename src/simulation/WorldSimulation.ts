@@ -22,6 +22,7 @@ import { SUN_DIRECTION, lightAmount } from './climate/light';
 import { evaporateLakes, rainLakes, waterAt } from './ecology/water';
 import { updatePlant } from './ecology/growth';
 import { RABBIT_DECISION_INTERVAL, updateRabbit } from './behaviors/rabbit';
+import { terrainHeightAt } from '../shared/terrain';
 
 const tmpWorld = v3();
 
@@ -169,14 +170,21 @@ export function refreshStats(world: GameWorldState): void {
   );
 }
 
-export function plantTreeAt(world: GameWorldState, localNormal: Vec3Like, species: PlantSpecies = 'tree'): boolean {
-  const cost = species === 'tree' ? 5 : species === 'grass' ? 2 : 3;
-  if (world.resources.stardust < cost) return false;
-  if (world.plants.length > 400) return false;
+export type PlantFailReason = 'stardust' | 'cap' | 'dense' | 'water';
 
-  // Simple density check
+export function plantTreeAt(
+  world: GameWorldState,
+  localNormal: Vec3Like,
+  species: PlantSpecies = 'tree',
+): { ok: true } | { ok: false; reason: PlantFailReason } {
+  const cost = species === 'tree' ? 5 : species === 'grass' ? 2 : 3;
+  if (world.resources.stardust < cost) return { ok: false, reason: 'stardust' };
+  if (world.plants.length > 400) return { ok: false, reason: 'cap' };
+
+  // Trees need more space; grass can pack tighter
+  const minAng = species === 'tree' ? 0.1 : 0.05;
   for (const p of world.plants) {
-    if (ang(p.position.normal, localNormal) < 0.08) return false;
+    if (ang(p.position.normal, localNormal) < minAng) return { ok: false, reason: 'dense' };
   }
 
   world.resources.stardust -= cost;
@@ -184,7 +192,7 @@ export function plantTreeAt(world: GameWorldState, localNormal: Vec3Like, specie
   world.plants.push(plant);
   pushLog(world, `种下了${species === 'tree' ? '一棵树' : species === 'grass' ? '一丛草' : '一朵花'}。`);
   refreshStats(world);
-  return true;
+  return { ok: true };
 }
 
 export function spawnRabbitAt(world: GameWorldState, localNormal: Vec3Like): boolean {
@@ -224,10 +232,11 @@ export function pushLog(world: GameWorldState, text: string): void {
 }
 
 function makePlant(species: PlantSpecies, normal: Vec3Like, growth: number): PlantState {
+  const n = normalize(v3(), normal);
   return {
     id: nextId('plant'),
     species,
-    position: { normal: normalize(v3(), normal), altitude: 0 },
+    position: { normal: n, altitude: terrainHeightAt(n.x, n.y, n.z) },
     age: 0,
     health: 1,
     water: 0.4,

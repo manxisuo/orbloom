@@ -37,6 +37,7 @@ export class Game {
   private lastT = 0;
   private disposed = false;
   private onUiSync: (world: GameWorldState, hover: HoverInfo) => void;
+  private onNotify: ((msg: string) => void) | null;
   private uiSyncAcc = 0;
   private autosaveAcc = 0;
   private saveRepo: SaveRepository | null = null;
@@ -55,6 +56,7 @@ export class Game {
       seed?: number;
       boot?: GameBootMode;
       saveRepository?: SaveRepository | null;
+      onNotify?: (msg: string) => void;
     } = {},
   ) {
     if (options.boot?.kind === 'loaded') {
@@ -64,6 +66,7 @@ export class Game {
     }
     this.budget = createBudget();
     this.onUiSync = onUiSync;
+    this.onNotify = options.onNotify ?? null;
     this.saveRepo = options.saveRepository ?? null;
     this.renderer = new ThreeRenderer(canvas, {
       onPointerDown: () => {},
@@ -207,24 +210,58 @@ export class Game {
 
     if (this.tool === 'rain') {
       rain(this.world);
+      this.notify('降下一场小雨');
       return;
     }
 
-    if (hit.type === 'plant' || hit.type === 'animal') {
-      if (hit.type === 'plant') this.selectedPlantId = hit.plant.id;
+    // Planting uses surface raycast so clicking existing grass doesn't swallow the action
+    if (this.tool === 'plant-tree' || this.tool === 'plant-grass') {
+      const surface = this.renderer.pickSurface();
+      if (!surface) {
+        this.notify('请点击星球表面');
+        return;
+      }
+      const species = this.tool === 'plant-tree' ? 'tree' : 'grass';
+      const result = plantTreeAt(this.world, surface.localNormal, species);
+      if (!result.ok) {
+        this.notify(this.plantFailText(result.reason, species));
+      }
       return;
     }
 
-    if (hit.type !== 'surface') return;
+    if (this.tool === 'spawn-rabbit') {
+      const surface = hit.type === 'surface' ? hit : this.renderer.pickSurface();
+      if (!surface) {
+        this.notify('请点击星球表面');
+        return;
+      }
+      const result = spawnRabbitAt(this.world, surface.localNormal);
+      if (!result) this.notify(this.world.resources.stardust < 8 ? '星尘不足（需 8）' : '兔子已经够多了');
+      return;
+    }
 
-    if (this.tool === 'plant-tree') {
-      plantTreeAt(this.world, hit.localNormal, 'tree');
-    } else if (this.tool === 'plant-grass') {
-      plantTreeAt(this.world, hit.localNormal, 'grass');
-    } else if (this.tool === 'spawn-rabbit') {
-      spawnRabbitAt(this.world, hit.localNormal);
-    } else if (this.tool === 'inspect') {
+    if (hit.type === 'plant') {
+      this.selectedPlantId = hit.plant.id;
+      return;
+    }
+    if (hit.type === 'animal') {
+      return;
+    }
+    if (hit.type === 'surface') {
       this.selectedPlantId = null;
     }
+  }
+
+  private plantFailText(reason: string, species: 'tree' | 'grass'): string {
+    if (reason === 'stardust') {
+      return species === 'tree' ? '星尘不足（种树需 5）' : '星尘不足（种草需 2）';
+    }
+    if (reason === 'cap') return '星球上植物太多了';
+    if (reason === 'dense') return '这里太挤了，换一块空地';
+    return '无法种植';
+  }
+
+  private notify(msg: string): void {
+    this.onNotify?.(msg);
   }
 }

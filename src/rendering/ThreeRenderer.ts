@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AnimalState, GameWorldState, PlantState } from '../shared/types';
 import { lightAmount, SUN_DIRECTION } from '../simulation/climate/light';
 import { waterAt } from '../simulation/ecology/water';
+import { terrainHeightAt } from '../shared/terrain';
 
 export type PickResult =
   | { type: 'surface'; point: THREE.Vector3; localNormal: THREE.Vector3; light: number; water: number }
@@ -44,6 +45,18 @@ export class ThreeRenderer {
   private marker: THREE.Mesh;
   private cloudGroup = new THREE.Group();
   private stars!: THREE.Points;
+
+  private grassMesh: THREE.InstancedMesh | null = null;
+  private flowerMesh: THREE.InstancedMesh | null = null;
+  private grassList: PlantState[] = [];
+  private flowerList: PlantState[] = [];
+  private readonly GRASS_MAX = 512;
+  private readonly FLOWER_MAX = 256;
+  private tmpMat = new THREE.Matrix4();
+  private tmpQuat = new THREE.Quaternion();
+  private tmpPos = new THREE.Vector3();
+  private tmpScale = new THREE.Vector3();
+  private tmpColor = new THREE.Color();
 
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
@@ -176,9 +189,7 @@ export class ThreeRenderer {
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i);
       const n = v.clone().normalize();
-      const h =
-        fbm(n.x * 1.8, n.y * 1.8, n.z * 1.8) * 0.08 +
-        fbm(n.x * 4.2 + 10, n.y * 4.2, n.z * 4.2) * 0.03;
+      const h = terrainHeightAt(n.x, n.y, n.z);
       const r = radius + h;
       v.copy(n).multiplyScalar(r);
       pos.setXYZ(i, v.x, v.y, v.z);
@@ -259,21 +270,29 @@ export class ThreeRenderer {
     this.atmosphere = new THREE.Mesh(atmoGeo, atmoMat);
     this.planetGroup.add(this.atmosphere);
 
-    // Clouds — a few low-poly blobs on a slightly larger shell
-    const cloudMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
+    // Clouds — soft unlit puffs so they never read as rocks on the night side
+    const cloudMat = new THREE.MeshBasicMaterial({
+      color: 0xf4f7ff,
       transparent: true,
-      opacity: 0.78,
-      roughness: 1,
-      flatShading: true,
+      opacity: 0.28,
+      depthWrite: false,
     });
-    for (let i = 0; i < 7; i++) {
-      const blob = new THREE.Mesh(new THREE.DodecahedronGeometry(0.08 + Math.random() * 0.06, 0), cloudMat);
+    for (let i = 0; i < 9; i++) {
+      const puff = new THREE.Group();
+      const lobes = 3 + Math.floor(Math.random() * 3);
+      for (let j = 0; j < lobes; j++) {
+        const lobe = new THREE.Mesh(new THREE.SphereGeometry(0.05 + Math.random() * 0.04, 8, 6), cloudMat);
+        lobe.position.set((Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.08);
+        lobe.scale.set(1.4 + Math.random() * 0.8, 0.35 + Math.random() * 0.15, 0.9 + Math.random() * 0.4);
+        puff.add(lobe);
+      }
       const n = new THREE.Vector3().randomDirection();
-      blob.position.copy(n.multiplyScalar(radius + 0.12 + Math.random() * 0.04));
-      blob.scale.set(1.6, 0.45, 1.1);
-      blob.lookAt(0, 0, 0);
-      this.cloudGroup.add(blob);
+      // Keep clouds off the poles a bit so they hug the visible band
+      n.y *= 0.55;
+      n.normalize();
+      puff.position.copy(n.multiplyScalar(radius + 0.16 + Math.random() * 0.05));
+      puff.lookAt(0, 0, 0);
+      this.cloudGroup.add(puff);
     }
     this.planetGroup.add(this.cloudGroup);
 
@@ -352,33 +371,46 @@ export class ThreeRenderer {
   pick(): PickResult {
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    // Prefer entities
-    const animalRoots = [...this.animalViews.values()].map((v) => v.root);
-    const plantRoots = [...this.plantViews.values()].map((v) => v.root);
-    const hitsEntities = this.raycaster.intersectObjects([...animalRoots, ...plantRoots], true);
+    const targets: THREE.Object3D[] = [];
+    for (const v of this.animalViews.values()) targets.push(v.root);
+    for (const v of this.plantViews.values()) targets.push(v.root);
+    if (this.grassMesh) targets.push(this.grassMesh);
+    if (this.flowerMesh) targets.push(this.flowerMesh);
+
+    const hitsEntities = this.raycaster.intersectObjects(targets, true);
     if (hitsEntities.length) {
-      let obj: THREE.Object3D | null = hitsEntities[0].object;
-      while (obj) {
-        const animal = animalRoots.find((r) => r === obj);
-        if (animal) {
-          const view = [...this.animalViews.values()].find((v) => v.root === animal);
-          if (view) return { type: 'animal', animal: view.animal };
-        }
-        const plant = plantRoots.find((r) => r === obj);
-        if (plant) {
-          const view = [...this.plantViews.values()].find((v) => v.root === plant);
-          if (view) return { type: 'plant', plant: view.plant };
-        }
-        obj = obj.parent;
+      const hit = hitsEntities[0];
+      const obj = hit.object;
+
+      if (this.grassMesh && (obj === this.grassMesh || obj.parent === this.grassMesh)) {
+        const plant = hit.instanceId != null ? this.grassList[hit.instanceId] : undefined;
+        if (plant) return { type: 'plant', plant };
+      }
+      if (this.flowerMesh && (obj === this.flowerMesh || obj.parent === this.flowerMesh)) {
+        const plant = hit.instanceId != null ? this.flowerList[hit.instanceId] : undefined;
+        if (plant) return { type: 'plant', plant };
+      }
+
+      let cur: THREE.Object3D | null = obj;
+      while (cur) {
+        const animal = this.animalViews.get(cur.name);
+        if (animal) return { type: 'animal', animal: animal.animal };
+        const plantView = this.plantViews.get(cur.name);
+        if (plantView) return { type: 'plant', plant: plantView.plant };
+        cur = cur.parent;
       }
     }
 
+    return this.pickSurface();
+  }
+
+  /** Raycast only the planet body — used when planting so entity hits don't swallow the click. */
+  pickSurface(): Extract<PickResult, { type: 'surface' }> | null {
+    this.raycaster.setFromCamera(this.pointer, this.camera);
     const hits = this.raycaster.intersectObject(this.planetMesh, false);
     if (!hits.length || !hits[0].face) return null;
     const point = hits[0].point.clone();
-    // Convert world hit to local normal in planet space
     const local = this.planetGroup.worldToLocal(point.clone()).normalize();
-    // Light uses world normal after planet rotation
     const worldN = point.clone().normalize();
     const light = lightAmount(worldN, SUN_DIRECTION);
     const water = waterAt(
@@ -459,9 +491,19 @@ export class ThreeRenderer {
     this.paintTerrainColors(planet.lakes);
     this.updateLakes(planet.lakes);
 
-    // Sync plants
+    // Trees stay individual; grass/flowers batched via InstancedMesh
+    this.grassList = [];
+    this.flowerList = [];
     const seenPlants = new Set<string>();
     for (const plant of plants) {
+      if (plant.species === 'grass') {
+        this.grassList.push(plant);
+        continue;
+      }
+      if (plant.species === 'flower') {
+        this.flowerList.push(plant);
+        continue;
+      }
       seenPlants.add(plant.id);
       let view = this.plantViews.get(plant.id);
       if (!view) {
@@ -478,6 +520,7 @@ export class ThreeRenderer {
         this.plantViews.delete(id);
       }
     }
+    this.syncInstancedPlants(planet.radius);
 
     // Sync animals
     const seenAnimals = new Set<string>();
@@ -534,45 +577,114 @@ export class ThreeRenderer {
     });
   }
 
+  private ensureInstanced(
+    kind: 'grass' | 'flower',
+  ): THREE.InstancedMesh {
+    if (kind === 'grass') {
+      if (!this.grassMesh) {
+        const geo = new THREE.ConeGeometry(0.032, 0.065, 5);
+        geo.translate(0, 0.032, 0);
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          flatShading: true,
+          roughness: 0.9,
+        });
+        this.grassMesh = new THREE.InstancedMesh(geo, mat, this.GRASS_MAX);
+        this.grassMesh.castShadow = true;
+        this.grassMesh.receiveShadow = true;
+        this.grassMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.grassMesh.frustumCulled = false;
+        this.planetGroup.add(this.grassMesh);
+      }
+      return this.grassMesh;
+    }
+    if (!this.flowerMesh) {
+      const geo = new THREE.ConeGeometry(0.028, 0.055, 5);
+      geo.translate(0, 0.027, 0);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        flatShading: true,
+        roughness: 0.9,
+      });
+      this.flowerMesh = new THREE.InstancedMesh(geo, mat, this.FLOWER_MAX);
+      this.flowerMesh.castShadow = true;
+      this.flowerMesh.receiveShadow = true;
+      this.flowerMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.flowerMesh.frustumCulled = false;
+      this.planetGroup.add(this.flowerMesh);
+    }
+    return this.flowerMesh;
+  }
+
+  private syncInstancedPlants(radius: number): void {
+    this.writeInstances('grass', this.grassList, radius, 0x6dbf5e, 0xa8a05a);
+    this.writeInstances('flower', this.flowerList, radius, 0xe88bc4, 0xa8a05a);
+  }
+
+  private writeInstances(
+    kind: 'grass' | 'flower',
+    list: PlantState[],
+    radius: number,
+    healthyHex: number,
+    sickHex: number,
+  ): void {
+    const mesh = this.ensureInstanced(kind);
+    const max = kind === 'grass' ? this.GRASS_MAX : this.FLOWER_MAX;
+    const count = Math.min(list.length, max);
+    const healthy = this.tmpColor.setHex(healthyHex);
+    const sick = new THREE.Color(sickHex);
+
+    for (let i = 0; i < count; i++) {
+      const p = list[i];
+      const nx = p.position.normal.x;
+      const ny = p.position.normal.y;
+      const nz = p.position.normal.z;
+      const ground = terrainHeightAt(nx, ny, nz);
+      const alt = Math.max(p.position.altitude, ground) + 0.004;
+      this.tmpPos.set(nx, ny, nz).multiplyScalar(radius + alt);
+      this.tmpQuat.setFromUnitVectors(this.up, this.tmpPos.clone().normalize());
+      // New plants start tiny; keep a visible floor so they aren't invisible
+      const s = Math.max(0.55, (0.55 + p.growth * 0.9) * (0.8 + p.health * 0.2));
+      this.tmpScale.setScalar(s);
+      this.tmpMat.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
+      mesh.setMatrixAt(i, this.tmpMat);
+
+      const c = sick.clone().lerp(healthy, p.health);
+      mesh.setColorAt(i, c);
+    }
+
+    mesh.count = count;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }
+
   private createPlantView(plant: PlantState): PlantView {
     const root = new THREE.Group();
     root.name = plant.id;
 
-    if (plant.species === 'tree') {
-      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b5a3c, flatShading: true, roughness: 0.9 });
-      const canopyMat = new THREE.MeshStandardMaterial({ color: 0x3f9b4f, flatShading: true, roughness: 0.85 });
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.026, 0.1, 5), trunkMat);
-      trunk.position.y = 0.05;
-      trunk.castShadow = true;
-      const canopy = new THREE.Mesh(new THREE.IcosahedronGeometry(0.09, 0), canopyMat);
-      canopy.position.y = 0.15;
-      canopy.castShadow = true;
-      root.add(trunk, canopy);
-      return { root, plant, canopy, trunk };
-    }
-
-    // Grass / flower — small cone cluster
-    const mat = new THREE.MeshStandardMaterial({
-      color: plant.species === 'flower' ? 0xe88bc4 : 0x6dbf5e,
-      flatShading: true,
-      roughness: 0.9,
-    });
-    const canopy = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.065, 5), mat);
-    canopy.position.y = 0.032;
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b5a3c, flatShading: true, roughness: 0.9 });
+    const canopyMat = new THREE.MeshStandardMaterial({ color: 0x3f9b4f, flatShading: true, roughness: 0.85 });
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.026, 0.1, 5), trunkMat);
+    trunk.position.y = 0.05;
+    trunk.castShadow = true;
+    const canopy = new THREE.Mesh(new THREE.IcosahedronGeometry(0.09, 0), canopyMat);
+    canopy.position.y = 0.15;
     canopy.castShadow = true;
-    root.add(canopy);
-    return { root, plant, canopy };
+    root.add(trunk, canopy);
+    return { root, plant, canopy, trunk };
   }
 
   private updatePlantView(view: PlantView, radius: number): void {
     const p = view.plant;
     const n = new THREE.Vector3(p.position.normal.x, p.position.normal.y, p.position.normal.z);
-    view.root.position.copy(n).multiplyScalar(radius + p.position.altitude);
+    const ground = terrainHeightAt(n.x, n.y, n.z);
+    const alt = Math.max(p.position.altitude, ground) + 0.004;
+    view.root.position.copy(n).multiplyScalar(radius + alt);
     view.root.quaternion.setFromUnitVectors(this.up, n);
     const s = 0.45 + p.growth * (p.species === 'tree' ? 1.4 : 0.95);
     view.root.scale.setScalar(s * (0.75 + p.health * 0.25));
 
-    if (p.species === 'tree' && view.trunk) {
+    if (view.trunk) {
       view.trunk.scale.y = 0.7 + p.growth * 1.3;
       view.canopy.position.y = 0.08 + p.growth * 0.12;
     }
@@ -626,7 +738,7 @@ export class ThreeRenderer {
     const a = view.animal;
     const n = new THREE.Vector3(a.position.normal.x, a.position.normal.y, a.position.normal.z);
     const hop = Math.max(0, Math.sin(a.hopPhase)) * 0.012 * (a.state === 'sleep' ? 0 : 1);
-    view.root.position.copy(n).multiplyScalar(radius + 0.01 + hop);
+    view.root.position.copy(n).multiplyScalar(radius + terrainHeightAt(n.x, n.y, n.z) + 0.02 + hop);
     view.root.quaternion.setFromUnitVectors(this.up, n);
 
     // Face along tangent
@@ -675,6 +787,16 @@ export class ThreeRenderer {
     window.removeEventListener('resize', this.resize);
     for (const view of this.plantViews.values()) disposeObject(view.root);
     for (const view of this.animalViews.values()) disposeObject(view.root);
+    if (this.grassMesh) {
+      this.planetGroup.remove(this.grassMesh);
+      disposeObject(this.grassMesh);
+      this.grassMesh = null;
+    }
+    if (this.flowerMesh) {
+      this.planetGroup.remove(this.flowerMesh);
+      disposeObject(this.flowerMesh);
+      this.flowerMesh = null;
+    }
     this.renderer.dispose();
   }
 }
@@ -687,51 +809,4 @@ function disposeObject(root: THREE.Object3D): void {
     if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
     else if (mat) mat.dispose();
   });
-}
-
-// Simple value-noise-ish fbm without deps
-function hash(x: number, y: number, z: number): number {
-  const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
-  return s - Math.floor(s);
-}
-
-function noise(x: number, y: number, z: number): number {
-  const ix = Math.floor(x);
-  const iy = Math.floor(y);
-  const iz = Math.floor(z);
-  const fx = x - ix;
-  const fy = y - iy;
-  const fz = z - iz;
-  const ux = fx * fx * (3 - 2 * fx);
-  const uy = fy * fy * (3 - 2 * fy);
-  const uz = fz * fz * (3 - 2 * fz);
-
-  const n000 = hash(ix, iy, iz);
-  const n100 = hash(ix + 1, iy, iz);
-  const n010 = hash(ix, iy + 1, iz);
-  const n110 = hash(ix + 1, iy + 1, iz);
-  const n001 = hash(ix, iy, iz + 1);
-  const n101 = hash(ix + 1, iy, iz + 1);
-  const n011 = hash(ix, iy + 1, iz + 1);
-  const n111 = hash(ix + 1, iy + 1, iz + 1);
-
-  const nx00 = n000 * (1 - ux) + n100 * ux;
-  const nx10 = n010 * (1 - ux) + n110 * ux;
-  const nx01 = n001 * (1 - ux) + n101 * ux;
-  const nx11 = n011 * (1 - ux) + n111 * ux;
-  const nxy0 = nx00 * (1 - uy) + nx10 * uy;
-  const nxy1 = nx01 * (1 - uy) + nx11 * uy;
-  return nxy0 * (1 - uz) + nxy1 * uz;
-}
-
-function fbm(x: number, y: number, z: number): number {
-  let v = 0;
-  let a = 0.5;
-  let f = 1;
-  for (let i = 0; i < 4; i++) {
-    v += a * noise(x * f, y * f, z * f);
-    a *= 0.5;
-    f *= 2;
-  }
-  return v;
 }
