@@ -79,7 +79,9 @@ export class ThreeRenderer {
   private lastY = 0;
   private downX = 0;
   private downY = 0;
-  private camDist = 3.4;
+  private camDist = 6.5; // start fully zoomed-out (smallest planet on screen)
+  private hasPointer = false;
+  private hoverRefreshAcc = 0;
   private cbs: RendererCallbacks;
   private canvas: HTMLCanvasElement;
   private up = new THREE.Vector3(0, 1, 0);
@@ -467,6 +469,7 @@ export class ThreeRenderer {
     const rect = this.canvas.getBoundingClientRect();
     this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    this.hasPointer = true;
   }
 
   private bindInput(): void {
@@ -480,6 +483,7 @@ export class ThreeRenderer {
       el.setPointerCapture(e.pointerId);
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this.updatePointerFromClient(e.clientX, e.clientY);
+      this.cbs.onHover(this.pick());
       if (activePointers.size === 1) {
         this.dragging = true;
         this.dragMoved = false;
@@ -522,9 +526,10 @@ export class ThreeRenderer {
           this.dragMoved = true;
         }
         this.cbs.onRotate(dx, dy);
-      } else if (e.pointerType === 'mouse') {
-        this.cbs.onHover(this.pick());
       }
+
+      // Mouse and touch: keep surface light/hover in sync with the finger/cursor
+      this.cbs.onHover(this.pick());
     });
 
     const end = (e: PointerEvent) => {
@@ -532,6 +537,7 @@ export class ThreeRenderer {
       if (activePointers.size < 2) pinchDist = 0;
       // Touch taps may never fire pointermove — pick must use the lift position
       this.updatePointerFromClient(e.clientX, e.clientY);
+      this.cbs.onHover(this.pick());
       if (this.dragging && !this.dragMoved) {
         this.cbs.onClick(this.pick());
       }
@@ -1205,6 +1211,15 @@ export class ThreeRenderer {
     this.updateFlocks(dt);
     this.updateFireflies(dt, this.lastPersonality, this.lastMushroomGlow);
     this.eventVfx?.update(dt);
+
+    // Keep light/hover fresh while the planet coasts under a still finger/cursor
+    if (this.hasPointer) {
+      this.hoverRefreshAcc += dt;
+      if (this.hoverRefreshAcc >= 0.1) {
+        this.hoverRefreshAcc = 0;
+        this.cbs.onHover(this.pick());
+      }
+    }
 
     this.renderer.render(this.scene, this.camera);
   }
