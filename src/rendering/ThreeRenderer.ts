@@ -47,6 +47,9 @@ export class ThreeRenderer {
   private marker: THREE.Mesh;
   private cloudGroup = new THREE.Group();
   private starGroup = new THREE.Group();
+  private flockGroup = new THREE.Group();
+  private flockPhase = 0;
+  private personalityTint = new THREE.Color(0x7eb6ff);
   private eventVfx: EventVfx | null = null;
 
   private grassMesh: THREE.InstancedMesh | null = null;
@@ -359,6 +362,45 @@ export class ThreeRenderer {
 
     this.scene.add(this.planetGroup);
     this.eventVfx = new EventVfx(this.planetGroup);
+    this.buildFlocks();
+  }
+
+  /** Ambient bird flocks circling the planet — visible as they pass the back side. */
+  private buildFlocks(): void {
+    const dark = new THREE.MeshBasicMaterial({ color: 0x2c3344, transparent: true, opacity: 0.9 });
+    for (let f = 0; f < 2; f++) {
+      const flock = new THREE.Group();
+      for (let i = 0; i < 5; i++) {
+        const bird = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.07, 4), dark);
+        bird.rotation.z = Math.PI / 2;
+        bird.position.set((Math.random() - 0.5) * 0.22, (Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.1);
+        flock.add(bird);
+      }
+      flock.userData.phase = f * Math.PI;
+      flock.userData.tilt = 0.25 + f * 0.15;
+      this.flockGroup.add(flock);
+    }
+    this.scene.add(this.flockGroup);
+  }
+
+  private updateFlocks(dt: number): void {
+    this.flockPhase += dt * 0.22;
+    const R = 1.55;
+    this.flockGroup.children.forEach((flock, i) => {
+      const phase = this.flockPhase + (flock.userData.phase as number);
+      const tilt = flock.userData.tilt as number;
+      flock.position.set(
+        Math.cos(phase) * R,
+        Math.sin(phase * 0.7 + i) * 0.35 * tilt,
+        Math.sin(phase) * R,
+      );
+      // Face along orbit direction
+      flock.rotation.y = -phase + Math.PI / 2;
+      flock.rotation.x = Math.sin(phase * 1.3) * 0.2;
+      flock.children.forEach((c, j) => {
+        c.position.y = (j - 2) * 0.03 + Math.sin(this.flockPhase * 8 + j) * 0.04;
+      });
+    });
   }
 
   private bindInput(): void {
@@ -555,6 +597,7 @@ export class ThreeRenderer {
     const { planet, plants, animals } = world;
     this.lastLakes = planet.lakes;
     this.planetGroup.rotation.set(planet.rotationX, planet.rotationY, 0);
+    this.applyPersonality(world.personality ?? 'wild');
 
     this.paintTerrainColors(planet.lakes);
     this.updateLakes(planet.lakes);
@@ -975,13 +1018,58 @@ export class ThreeRenderer {
 
   playEventVfx(id: EventId, localNormal?: Vec3Like | null): void {
     this.eventVfx?.play(id, localNormal ?? null, 1);
+    // Migrating birds: temporary extra flock burst is already ambient; nudge a close pass
+    if (id === 'migratingBirds') {
+      this.flockPhase = -0.4;
+    }
+  }
+
+  applyPersonality(personality: string): void {
+    const atmo = this.atmosphere.material as THREE.MeshBasicMaterial;
+    const ocean = this.oceanMesh.material as THREE.MeshStandardMaterial;
+    switch (personality) {
+      case 'garden':
+        this.personalityTint.setHex(0x8fd8b0);
+        atmo.color.setHex(0x9fe0c0);
+        atmo.opacity = 0.11;
+        ocean.color.setHex(0x3d9fd1);
+        break;
+      case 'forest':
+        this.personalityTint.setHex(0x6aaa70);
+        atmo.color.setHex(0x7ab890);
+        atmo.opacity = 0.13;
+        ocean.color.setHex(0x2f7eb8);
+        break;
+      case 'desert':
+        this.personalityTint.setHex(0xd2b07a);
+        atmo.color.setHex(0xe0c090);
+        atmo.opacity = 0.08;
+        ocean.color.setHex(0x4a90b0);
+        break;
+      case 'nightGlow':
+        this.personalityTint.setHex(0x8a9aff);
+        atmo.color.setHex(0x9aa8ff);
+        atmo.opacity = 0.14;
+        ocean.color.setHex(0x2a5a9a);
+        break;
+      case 'chaos':
+        this.personalityTint.setHex(0xc07070);
+        atmo.color.setHex(0xd08080);
+        atmo.opacity = 0.1;
+        ocean.color.setHex(0x5a7080);
+        break;
+      default:
+        this.personalityTint.setHex(0x7eb6ff);
+        atmo.color.setHex(0x7eb6ff);
+        atmo.opacity = 0.09;
+        ocean.color.setHex(0x2f7eb8);
+    }
   }
 
   render(dt: number): void {
     this.camera.position.normalize().multiplyScalar(this.camDist);
     this.camera.lookAt(0, 0, 0);
 
-    // Marker faces camera-ish along surface normal if visible
     if (this.marker.visible) {
       this.marker.lookAt(this.camera.position);
     }
@@ -989,6 +1077,7 @@ export class ThreeRenderer {
     this.starGroup.rotation.y += 0.00012;
     this.cloudGroup.rotation.y += 0.0004;
     this.oceanMesh.rotation.y += 0.00005;
+    this.updateFlocks(dt);
     this.eventVfx?.update(dt);
 
     this.renderer.render(this.scene, this.camera);

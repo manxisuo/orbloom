@@ -113,6 +113,9 @@ export class SaveRepository {
       if (!Number.isFinite(a.breedCooldown)) a.breedCooldown = 0;
     }
 
+    if (!Array.isArray(world.delayedEvents)) world.delayedEvents = [];
+    if (!world.personality) world.personality = 'wild';
+
     return { meta: save.meta, world };
   }
 }

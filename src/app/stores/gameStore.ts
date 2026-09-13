@@ -22,6 +22,7 @@ export const useGameStore = defineStore('game', () => {
   const hoverLabel = ref('');
   const notice = ref('');
   const pendingEvent = ref<PendingEvent | null>(null);
+  const personality = ref('wild');
   let noticeTimer = 0;
 
   const dayLabel = computed(() => stats.value.day || 1);
@@ -35,6 +36,7 @@ export const useGameStore = defineStore('game', () => {
     hoverWater: number;
     hoverLabel: string;
     pendingEvent?: PendingEvent | null;
+    personality?: string;
   }) {
     stardust.value = payload.stardust;
     speed.value = payload.speed;
@@ -44,6 +46,7 @@ export const useGameStore = defineStore('game', () => {
     hoverWater.value = payload.hoverWater;
     hoverLabel.value = payload.hoverLabel;
     if (payload.pendingEvent !== undefined) pendingEvent.value = payload.pendingEvent;
+    if (payload.personality) personality.value = payload.personality;
   }
 
   function setTool(t: ToolMode) {
@@ -73,6 +76,7 @@ export const useGameStore = defineStore('game', () => {
     hoverLabel,
     notice,
     pendingEvent,
+    personality,
     dayLabel,
     sync,
     setTool,

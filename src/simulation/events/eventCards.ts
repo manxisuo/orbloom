@@ -112,6 +112,11 @@ export const EVENT_DEFS: EventDef[] = [
     weight: 1,
     apply(world) {
       world.resources.stardust += 6;
+      // Birds return with gifts a few game-days later
+      world.delayedEvents.push({
+        kind: 'birdGift',
+        fireAt: world.time.gameTime + world.time.dayLength * 2.5,
+      });
       return { message: '候鸟落脚又启程，留下几枚闪亮的羽尘。' };
     },
     decline() {

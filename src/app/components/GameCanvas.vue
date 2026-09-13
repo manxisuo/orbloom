@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, computed } from 'vue';
 import { Game } from '../../game/Game';
 import { useGameStore } from '../stores/gameStore';
 import type { ToolMode } from '../../shared/types';
 import { createSaveRepository } from '../../persistence';
 import type { SaveMeta } from '../../persistence/types';
+import { personalityLabel as personalityName } from '../../simulation/WorldSimulation';
 
 const store = useGameStore();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 let game: Game | null = null;
+
+const personalityLabel = computed(() => personalityName(store.personality));
 
 const repo = createSaveRepository('auto');
 
@@ -82,6 +85,7 @@ onMounted(async () => {
       hoverWater,
       hoverLabel,
       pendingEvent: world.pendingEvent,
+      personality: world.personality,
     });
   }, {
     seed: 42,
@@ -223,7 +227,7 @@ onBeforeUnmount(() => {
         <div>
           <div class="title">星球值日生</div>
           <div class="subtitle">
-            Orbloom · 第 {{ store.dayLabel }} 天
+            Orbloom · 第 {{ store.dayLabel }} 天 · {{ personalityLabel }}
             <span v-if="lastSavedLabel" class="saved-tag">已存 {{ lastSavedLabel }}</span>
           </div>
         </div>

@@ -87,6 +87,8 @@ export function createWorld(seed = 42): GameWorldState {
     modifiers: { droughtDays: 0, coldDays: 0 },
     pendingEvent: null,
     nextEventIn: 40,
+    delayedEvents: [],
+    personality: 'wild',
   };
 }
 
@@ -226,6 +228,8 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     maybeSpawnBees(world);
     maybeRabbitLife(world, dtLakeDays);
     maybeSpawnFoxes(world);
+    tickDelayedEvents(world);
+    updatePersonality(world);
 
     // Event cards
     if (!world.pendingEvent) {
@@ -472,6 +476,75 @@ export function refreshStats(world: GameWorldState): void {
     world.time.gameTime,
     world.time.dayLength,
   );
+}
+
+function tickDelayedEvents(world: GameWorldState): void {
+  if (!world.delayedEvents?.length) return;
+  const rng = mulberry32(Math.floor(world.time.gameTime * 17) + world.seed);
+  for (let i = world.delayedEvents.length - 1; i >= 0; i--) {
+    const ev = world.delayedEvents[i];
+    if (world.time.gameTime < ev.fireAt) continue;
+    world.delayedEvents.splice(i, 1);
+    if (ev.kind === 'birdGift') {
+      const n = randomOnSphere(v3(), rng);
+      const species: PlantSpecies = rng() < 0.5 ? 'flower' : 'grass';
+      for (let k = 0; k < 3; k++) {
+        const jitter = randomOnSphere(v3(), rng);
+        const mixed = normalize(
+          v3(),
+          v3(
+            n.x + (jitter.x - n.x) * 0.2,
+            n.y + (jitter.y - n.y) * 0.2,
+            n.z + (jitter.z - n.z) * 0.2,
+          ),
+        );
+        world.plants.push(makePlant(species, mixed, 0.25 + rng() * 0.2));
+      }
+      pushLog(world, '候鸟如约归来，留下了远方的种子。');
+    }
+  }
+}
+
+const PERSONALITY_LABEL: Record<string, string> = {
+  wild: '荒野',
+  garden: '花园',
+  forest: '森林',
+  desert: '荒漠',
+  nightGlow: '夜光',
+  chaos: '混沌',
+};
+
+function updatePersonality(world: GameWorldState): void {
+  const plants = world.plants;
+  const animals = world.animals;
+  const trees = plants.filter((p) => p.species === 'tree').length;
+  const flowers = plants.filter((p) => p.species === 'flower').length;
+  const grass = plants.filter((p) => p.species === 'grass').length;
+  const total = plants.length || 1;
+  const avgHealth = plants.reduce((s, p) => s + p.health, 0) / total;
+  const avgLake =
+    world.planet.lakes.reduce((s, l) => s + l.water, 0) / Math.max(1, world.planet.lakes.length);
+  const foxes = animals.filter((a) => a.species === 'fox').length;
+  const rabbits = animals.filter((a) => a.species === 'rabbit').length;
+  const stressed = plants.filter((p) => p.health < 0.35).length / total;
+
+  let next: typeof world.personality = 'wild';
+  if (stressed > 0.45 || (foxes >= 2 && rabbits < 4)) next = 'chaos';
+  else if (avgLake < 0.2 && trees < 4) next = 'desert';
+  else if (trees >= 10 && avgLake > 0.35) next = 'forest';
+  else if (flowers >= 8 && avgHealth > 0.55) next = 'garden';
+  else if (grass + flowers > trees * 2 && animals.filter((a) => a.species === 'bee').length >= 2) {
+    next = 'garden';
+  } else if (trees < 3 && grass < 12) next = 'wild';
+
+  if (next !== world.personality) {
+    world.personality = next;
+    pushLog(world, `星球性情渐显：${PERSONALITY_LABEL[next] ?? next}星球。`);
+  }
+}
+
+export function personalityLabel(id: string): string {
+  return PERSONALITY_LABEL[id] ?? id;
 }
 
 export type PlantFailReason = 'stardust' | 'cap' | 'dense' | 'water';

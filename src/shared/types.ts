@@ -121,6 +121,22 @@ export interface WorldModifiers {
   coldDays: number;
 };
 
+export type DelayedEventKind = 'birdGift';
+
+export interface DelayedEvent {
+  kind: DelayedEventKind;
+  /** Absolute game time when it fires */
+  fireAt: number;
+};
+
+export type PlanetPersonality =
+  | 'wild'
+  | 'garden'
+  | 'forest'
+  | 'desert'
+  | 'nightGlow'
+  | 'chaos';
+
 export type ToolMode =
   | 'inspect'
   | 'plant-tree'
@@ -143,4 +159,6 @@ export interface GameWorldState {
   pendingEvent: PendingEvent | null;
   /** Game seconds until next event offer */
   nextEventIn: number;
+  delayedEvents: DelayedEvent[];
+  personality: PlanetPersonality;
 };
