@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { AnimalState, GameWorldState, PlantState } from '../shared/types';
+import type { AnimalState, EventId, GameWorldState, PlantState, Vec3Like } from '../shared/types';
 import { lightAmount, SUN_DIRECTION } from '../simulation/climate/light';
 import { waterAt } from '../simulation/ecology/water';
 import { terrainHeightAt } from '../shared/terrain';
+import { EventVfx } from './EventVfx';
 
 export type PickResult =
   | { type: 'surface'; point: THREE.Vector3; localNormal: THREE.Vector3; light: number; water: number }
@@ -46,6 +47,7 @@ export class ThreeRenderer {
   private marker: THREE.Mesh;
   private cloudGroup = new THREE.Group();
   private stars!: THREE.Points;
+  private eventVfx: EventVfx | null = null;
 
   private grassMesh: THREE.InstancedMesh | null = null;
   private flowerMesh: THREE.InstancedMesh | null = null;
@@ -301,6 +303,7 @@ export class ThreeRenderer {
     this.planetGroup.add(this.cloudGroup);
 
     this.scene.add(this.planetGroup);
+    this.eventVfx = new EventVfx(this.planetGroup);
   }
 
   private bindInput(): void {
@@ -915,7 +918,11 @@ export class ThreeRenderer {
     view.root.scale.setScalar(scale);
   }
 
-  render(_dt: number): void {
+  playEventVfx(id: EventId, localNormal?: Vec3Like | null): void {
+    this.eventVfx?.play(id, localNormal ?? null, 1);
+  }
+
+  render(dt: number): void {
     this.camera.position.normalize().multiplyScalar(this.camDist);
     this.camera.lookAt(0, 0, 0);
 
@@ -927,6 +934,7 @@ export class ThreeRenderer {
     this.stars.rotation.y += 0.00015;
     this.cloudGroup.rotation.y += 0.0004;
     this.oceanMesh.rotation.y += 0.00005;
+    this.eventVfx?.update(dt);
 
     this.renderer.render(this.scene, this.camera);
   }
@@ -943,6 +951,8 @@ export class ThreeRenderer {
 
   dispose(): void {
     window.removeEventListener('resize', this.resize);
+    this.eventVfx?.dispose();
+    this.eventVfx = null;
     for (const view of this.plantViews.values()) disposeObject(view.root);
     for (const view of this.animalViews.values()) disposeObject(view.root);
     if (this.grassMesh) {

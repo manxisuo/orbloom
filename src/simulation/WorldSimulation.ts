@@ -1,6 +1,7 @@
 import type {
   AnimalState,
   EcoStats,
+  EventId,
   GameWorldState,
   LogEntry,
   PlantSpecies,
@@ -252,15 +253,23 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
   }
 }
 
-export function resolvePendingEvent(world: GameWorldState, accept: boolean): string {
-  if (!world.pendingEvent) return '';
-  const def = findEventDef(world.pendingEvent.id);
+export function resolvePendingEvent(
+  world: GameWorldState,
+  accept: boolean,
+): { message: string; eventId: EventId; impact?: Vec3Like; accepted: boolean } | null {
+  if (!world.pendingEvent) return null;
+  const eventId = world.pendingEvent.id;
+  const def = findEventDef(eventId);
   const rng = mulberry32(Math.floor(world.time.gameTime * 1000) + world.plants.length);
-  const msg = accept ? def.apply(world, rng) : (def.decline?.(world) ?? '事件过去了。');
+  const result = accept
+    ? def.apply(world, rng)
+    : { message: def.decline?.(world) ?? '事件过去了。' as string };
+  const message = typeof result === 'string' ? result : result.message;
+  const impact = typeof result === 'string' ? undefined : result.impact;
   world.pendingEvent = null;
-  pushLog(world, msg);
+  pushLog(world, message);
   refreshStats(world);
-  return msg;
+  return { message, eventId, impact, accepted: accept };
 }
 
 export function makePlantForEvent(species: PlantSpecies, normal: Vec3Like, growth = 0.2): PlantState {

@@ -2,6 +2,12 @@ import type { EventId, GameWorldState, PendingEvent, Vec3Like } from '../../shar
 import { nextId, randomOnSphere, v3 } from '../../shared/math';
 import { makePlantForEvent } from '../WorldSimulation';
 
+export interface EventApplyResult {
+  message: string;
+  /** Local surface normal for VFX anchoring (planet space). */
+  impact?: Vec3Like;
+}
+
 export interface EventDef {
   id: EventId;
   title: string;
@@ -9,7 +15,7 @@ export interface EventDef {
   acceptLabel: string;
   declineLabel: string;
   weight: number;
-  apply: (world: GameWorldState, rng: () => number) => string;
+  apply: (world: GameWorldState, rng: () => number) => EventApplyResult;
   decline?: (world: GameWorldState) => string;
 }
 
@@ -24,7 +30,6 @@ export const EVENT_DEFS: EventDef[] = [
     apply(world, rng) {
       const n = randomOnSphere(v3(), rng);
       world.resources.stardust += 12;
-      // Scorch a nearby plant if any
       let scorched: string | null = null;
       for (const p of world.plants) {
         const d = ang(p.position.normal, n);
@@ -35,9 +40,10 @@ export const EVENT_DEFS: EventDef[] = [
           break;
         }
       }
-      return scorched
-        ? '流星带来了星尘，也留下一片焦痕。'
-        : '流星带来了闪亮的星尘。';
+      return {
+        message: scorched ? '流星带来了星尘，也留下一片焦痕。' : '流星带来了闪亮的星尘。',
+        impact: n,
+      };
     },
     decline() {
       return '流星擦过大气层，什么也没留下。';
@@ -52,7 +58,7 @@ export const EVENT_DEFS: EventDef[] = [
     weight: 1,
     apply(world) {
       world.modifiers.coldDays = Math.max(world.modifiers.coldDays, 2.5);
-      return '寒夜降临，植物生长放缓。';
+      return { message: '寒夜降临，植物生长放缓。' };
     },
     decline() {
       return '寒流改道，星球躲过一劫。';
@@ -67,7 +73,7 @@ export const EVENT_DEFS: EventDef[] = [
     weight: 1,
     apply(world) {
       world.modifiers.droughtDays = Math.max(world.modifiers.droughtDays, 3);
-      return '干旱季节开始，湖泊水位承压。';
+      return { message: '干旱季节开始，湖泊水位承压。' };
     },
     decline() {
       return '一场意外的湿气缓解了干旱征兆。';
@@ -88,7 +94,10 @@ export const EVENT_DEFS: EventDef[] = [
         const p = makePlantForEvent(species, mix(n, jitter, 0.15));
         world.plants.push(p);
       }
-      return species === 'flower' ? '奇怪的种子开出了花。' : '奇怪的种子长成了一片草。';
+      return {
+        message: species === 'flower' ? '奇怪的种子开出了花。' : '奇怪的种子长成了一片草。',
+        impact: n,
+      };
     },
     decline() {
       return '种子被风吹走了。';
@@ -103,7 +112,7 @@ export const EVENT_DEFS: EventDef[] = [
     weight: 1,
     apply(world) {
       world.resources.stardust += 6;
-      return '候鸟落脚又启程，留下几枚闪亮的羽尘。';
+      return { message: '候鸟落脚又启程，留下几枚闪亮的羽尘。' };
     },
     decline() {
       return '候鸟转向远方。';

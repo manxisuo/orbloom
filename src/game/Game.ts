@@ -171,8 +171,12 @@ export class Game {
   }
 
   resolveEvent(accept: boolean): void {
-    const msg = resolvePendingEvent(this.world, accept);
-    if (msg) this.notify(msg);
+    const result = resolvePendingEvent(this.world, accept);
+    if (!result) return;
+    this.notify(result.message);
+    if (accept) {
+      this.renderer.playEventVfx(result.eventId, result.impact ?? null);
+    }
   }
 
   /** Drag sets angular velocity (capped); planet coasts after release. */
