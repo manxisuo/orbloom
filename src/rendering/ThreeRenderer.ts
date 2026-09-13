@@ -49,7 +49,11 @@ export class ThreeRenderer {
   private starGroup = new THREE.Group();
   private flockGroup = new THREE.Group();
   private flockPhase = 0;
+  private fireflyPoints: THREE.Points | null = null;
+  private fireflyPhase = 0;
   private personalityTint = new THREE.Color(0x7eb6ff);
+  private lastPersonality = 'wild';
+  private lastMushroomGlow = 0;
   private eventVfx: EventVfx | null = null;
 
   private grassMesh: THREE.InstancedMesh | null = null;
@@ -363,6 +367,62 @@ export class ThreeRenderer {
     this.scene.add(this.planetGroup);
     this.eventVfx = new EventVfx(this.planetGroup);
     this.buildFlocks();
+    this.buildFireflies();
+  }
+
+  private buildFireflies(): void {
+    const count = 80;
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const r = 1.08 + Math.random() * 0.25;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.cos(phi);
+      pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.fireflyPoints = new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({
+        color: 0xc8ffb0,
+        size: 2.2,
+        sizeAttenuation: false,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false,
+      }),
+    );
+    this.planetGroup.add(this.fireflyPoints);
+  }
+
+  private updateFireflies(dt: number, personality: string, mushroomGlow: number): void {
+    if (!this.fireflyPoints) return;
+    this.fireflyPhase += dt;
+    // More fireflies when nightGlow or many glowing mushrooms
+    const target =
+      personality === 'nightGlow' ? 0.85 : Math.min(0.55, 0.08 + mushroomGlow * 0.4);
+    const mat = this.fireflyPoints.material as THREE.PointsMaterial;
+    mat.opacity += (target - mat.opacity) * Math.min(1, dt * 2);
+    this.fireflyPoints.rotation.y += dt * 0.08;
+    this.fireflyPoints.rotation.x = Math.sin(this.fireflyPhase * 0.15) * 0.05;
+    const pos = this.fireflyPoints.geometry.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      pos.setY(i, y + Math.sin(this.fireflyPhase * 1.4 + i) * dt * 0.02);
+    }
+    pos.needsUpdate = true;
+  }
+
+  private countMushroomGlow(plants: PlantState[]): number {
+    let n = 0;
+    for (const p of plants) {
+      if (p.species === 'mushroom' && p.growth > 0.25) n += p.growth;
+    }
+    return Math.min(1, n / 8);
   }
 
   /** Ambient bird flocks circling the planet — visible as they pass the back side. */
@@ -598,6 +658,8 @@ export class ThreeRenderer {
     this.lastLakes = planet.lakes;
     this.planetGroup.rotation.set(planet.rotationX, planet.rotationY, 0);
     this.applyPersonality(world.personality ?? 'wild');
+    this.lastPersonality = world.personality ?? 'wild';
+    this.lastMushroomGlow = this.countMushroomGlow(plants);
 
     this.paintTerrainColors(planet.lakes);
     this.updateLakes(planet.lakes);
@@ -607,14 +669,15 @@ export class ThreeRenderer {
     this.flowerList = [];
     const seenPlants = new Set<string>();
     for (const plant of plants) {
-      if (plant.species === 'grass') {
-        this.grassList.push(plant);
-        continue;
-      }
       if (plant.species === 'flower') {
         this.flowerList.push(plant);
         continue;
       }
+      if (plant.species === 'grass') {
+        this.grassList.push(plant);
+        continue;
+      }
+      // trees + mushrooms: individual views (mushroom needs emissive cap)
       seenPlants.add(plant.id);
       let view = this.plantViews.get(plant.id);
       if (!view) {
@@ -896,6 +959,26 @@ export class ThreeRenderer {
     const root = new THREE.Group();
     root.name = plant.id;
 
+    if (plant.species === 'mushroom') {
+      const stemMat = new THREE.MeshStandardMaterial({ color: 0xd8c8b0, flatShading: true, roughness: 0.9 });
+      const capMat = new THREE.MeshStandardMaterial({
+        color: 0x7ec8ff,
+        emissive: 0x3a90c8,
+        emissiveIntensity: 0.85,
+        flatShading: true,
+        roughness: 0.5,
+      });
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, 0.04, 5), stemMat);
+      trunk.position.y = 0.02;
+      trunk.castShadow = true;
+      const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.035, 7, 5, 0, Math.PI * 2, 0, Math.PI * 0.55), capMat);
+      canopy.position.y = 0.045;
+      canopy.scale.set(1.3, 0.85, 1.3);
+      canopy.castShadow = true;
+      root.add(trunk, canopy);
+      return { root, plant, canopy, trunk };
+    }
+
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b5a3c, flatShading: true, roughness: 0.9 });
     const canopyMat = new THREE.MeshStandardMaterial({ color: 0x3f9b4f, flatShading: true, roughness: 0.85 });
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.026, 0.1, 5), trunkMat);
@@ -925,6 +1008,12 @@ export class ThreeRenderer {
 
     // Health tint
     const mat = view.canopy.material as THREE.MeshStandardMaterial;
+    if (p.species === 'mushroom') {
+      const glow = 0.4 + p.growth * 0.8;
+      mat.emissiveIntensity = glow;
+      mat.color.setHex(0x7ec8ff).lerp(new THREE.Color(0xa8e0ff), p.health);
+      return;
+    }
     const healthy = p.species === 'flower' ? new THREE.Color(0xe88bc4) : new THREE.Color(0x3f9b4f);
     const sick = new THREE.Color(0xa8a05a);
     mat.color.copy(sick).lerp(healthy, p.health);
@@ -1078,6 +1167,7 @@ export class ThreeRenderer {
     this.cloudGroup.rotation.y += 0.0004;
     this.oceanMesh.rotation.y += 0.00005;
     this.updateFlocks(dt);
+    this.updateFireflies(dt, this.lastPersonality, this.lastMushroomGlow);
     this.eventVfx?.update(dt);
 
     this.renderer.render(this.scene, this.camera);

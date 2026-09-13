@@ -67,6 +67,7 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
   { id: 'plant-tree', label: '种树', hint: '点击球面种下一棵树', cost: 5 },
   { id: 'plant-grass', label: '种草', hint: '为兔子提供食物', cost: 2 },
   { id: 'plant-flower', label: '种花', hint: '吸引蜜蜂授粉', cost: 3 },
+  { id: 'plant-mushroom', label: '种菇', hint: '夜间生长并发光', cost: 4 },
   { id: 'spawn-rabbit', label: '引兔', hint: '让一只兔子来到这里', cost: 8 },
   { id: 'spawn-fox', label: '引狐', hint: '狐狸会捕食兔子', cost: 10 },
   { id: 'rain', label: '降雨', hint: '滋润湖泊（点星球任意处）', cost: 6 },

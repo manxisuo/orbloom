@@ -33,6 +33,22 @@ export function updatePlant(plant: PlantState, deps: GrowthDeps): void {
   // Effective light for growth is reduced by canopy (grass under trees grows slower)
   const effLight = light * (plant.species === 'tree' ? 1 : 1 - shade * 0.35);
 
+  if (plant.species === 'mushroom') {
+    // Fungi thrive in darkness and moisture; sun withers them
+    if (band === 'night') {
+      const push = (0.2 + water * 0.7 + shade * 0.25) * dtDays * 0.7;
+      plant.growth = Math.min(1, plant.growth + push);
+      plant.health = Math.min(1, plant.health + (water > 0.15 ? 0.12 : -0.05) * dtDays);
+    } else if (band === 'dusk') {
+      plant.growth = Math.min(1, plant.growth + 0.05 * water * dtDays);
+    } else {
+      plant.growth = Math.max(0, plant.growth - 0.12 * light * dtDays);
+      plant.health = Math.max(0, plant.health - 0.18 * light * dtDays);
+    }
+    plant.health = Math.min(1, Math.max(0, plant.health));
+    return;
+  }
+
   if (band === 'day') {
     const growthPush = effLight * (0.35 + water * 0.65) - waterStress * 0.4 * droughtMul;
     plant.growth = Math.min(1, Math.max(0, plant.growth + growthPush * dtDays * 0.55));
@@ -65,7 +81,7 @@ export function forageAt(plants: PlantState[], target: Vec3Like, radiusRad: numb
   let best: PlantState | null = null;
   let bestDist = radiusRad;
   for (const p of plants) {
-    if (p.species === 'tree') continue;
+    if (p.species === 'tree' || p.species === 'mushroom') continue;
     if (p.growth < 0.15 || p.health < 0.2) continue;
     const d = angDist(p.position.normal, target);
     if (d < bestDist) {

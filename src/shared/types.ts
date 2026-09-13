@@ -6,7 +6,7 @@ export interface SurfacePosition {
   altitude: number;
 }
 
-export type PlantSpecies = 'tree' | 'grass' | 'flower';
+export type PlantSpecies = 'tree' | 'grass' | 'flower' | 'mushroom';
 export type AnimalSpecies = 'rabbit' | 'bee' | 'fox';
 
 export type AnimalBrainState =
@@ -146,6 +146,7 @@ export type ToolMode =
   | 'plant-tree'
   | 'plant-grass'
   | 'plant-flower'
+  | 'plant-mushroom'
   | 'spawn-rabbit'
   | 'spawn-fox'
   | 'rain';

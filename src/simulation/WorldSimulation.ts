@@ -534,6 +534,7 @@ function updatePersonality(world: GameWorldState): void {
   const trees = plants.filter((p) => p.species === 'tree').length;
   const flowers = plants.filter((p) => p.species === 'flower').length;
   const grass = plants.filter((p) => p.species === 'grass').length;
+  const mushrooms = plants.filter((p) => p.species === 'mushroom' && p.growth > 0.3).length;
   const total = plants.length || 1;
   const avgHealth = plants.reduce((s, p) => s + p.health, 0) / total;
   const avgLake =
@@ -544,6 +545,7 @@ function updatePersonality(world: GameWorldState): void {
 
   let next: typeof world.personality = 'wild';
   if (stressed > 0.45 || (foxes >= 2 && rabbits < 4)) next = 'chaos';
+  else if (mushrooms >= 6) next = 'nightGlow';
   else if (avgLake < 0.2 && trees < 4) next = 'desert';
   else if (trees >= 10 && avgLake > 0.35) next = 'forest';
   else if (flowers >= 8 && avgHealth > 0.55) next = 'garden';
@@ -568,12 +570,12 @@ export function plantTreeAt(
   localNormal: Vec3Like,
   species: PlantSpecies = 'tree',
 ): { ok: true } | { ok: false; reason: PlantFailReason } {
-  const cost = species === 'tree' ? 5 : species === 'grass' ? 2 : 3;
+  const cost = species === 'tree' ? 5 : species === 'grass' ? 2 : species === 'mushroom' ? 4 : 3;
   if (world.resources.stardust < cost) return { ok: false, reason: 'stardust' };
   if (world.plants.length > 400) return { ok: false, reason: 'cap' };
 
   // Trees need more space; grass can pack tighter
-  const minAng = species === 'tree' ? 0.1 : 0.05;
+  const minAng = species === 'tree' ? 0.1 : species === 'mushroom' ? 0.07 : 0.05;
   for (const p of world.plants) {
     if (ang(p.position.normal, localNormal) < minAng) return { ok: false, reason: 'dense' };
   }
@@ -581,7 +583,7 @@ export function plantTreeAt(
   world.resources.stardust -= cost;
   const plant = makePlant(species, cloneV3(localNormal), 0.05);
   world.plants.push(plant);
-  pushLog(world, `种下了${species === 'tree' ? '一棵树' : species === 'grass' ? '一丛草' : '一朵花'}。`);
+  pushLog(world, `种下了${species === 'tree' ? '一棵树' : species === 'grass' ? '一丛草' : species === 'mushroom' ? '一朵发光蘑菇' : '一朵花'}。`);
   refreshStats(world);
   return { ok: true };
 }

@@ -257,13 +257,25 @@ export class Game {
     }
 
     // Planting uses surface raycast so clicking existing grass doesn't swallow the action
-    if (this.tool === 'plant-tree' || this.tool === 'plant-grass' || this.tool === 'plant-flower') {
+    if (
+      this.tool === 'plant-tree' ||
+      this.tool === 'plant-grass' ||
+      this.tool === 'plant-flower' ||
+      this.tool === 'plant-mushroom'
+    ) {
       const surface = this.renderer.pickSurface();
       if (!surface) {
         this.notify('请点击星球表面');
         return;
       }
-      const species = this.tool === 'plant-tree' ? 'tree' : this.tool === 'plant-flower' ? 'flower' : 'grass';
+      const species =
+        this.tool === 'plant-tree'
+          ? 'tree'
+          : this.tool === 'plant-flower'
+            ? 'flower'
+            : this.tool === 'plant-mushroom'
+              ? 'mushroom'
+              : 'grass';
       const result = plantTreeAt(this.world, surface.localNormal, species);
       if (!result.ok) {
         this.notify(this.plantFailText(result.reason, species));
@@ -303,10 +315,11 @@ export class Game {
     }
   }
 
-  private plantFailText(reason: string, species: 'tree' | 'grass' | 'flower'): string {
+  private plantFailText(reason: string, species: 'tree' | 'grass' | 'flower' | 'mushroom'): string {
     if (reason === 'stardust') {
       if (species === 'tree') return '星尘不足（种树需 5）';
       if (species === 'flower') return '星尘不足（种花需 3）';
+      if (species === 'mushroom') return '星尘不足（种蘑菇需 4）';
       return '星尘不足（种草需 2）';
     }
     if (reason === 'cap') return '星球上植物太多了';

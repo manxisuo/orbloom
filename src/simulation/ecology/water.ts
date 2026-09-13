@@ -41,5 +41,6 @@ export function rainLakes(lakes: LakeCenter[], amount = 0.12): void {
 export function plantWaterFactor(plant: PlantState, soilWater: number): number {
   if (plant.species === 'grass') return soilWater;
   if (plant.species === 'flower') return Math.min(1, soilWater * 1.1);
+  if (plant.species === 'mushroom') return Math.min(1, soilWater * 1.15 + 0.08);
   return Math.min(1, soilWater * 0.9 + 0.05);
 }
