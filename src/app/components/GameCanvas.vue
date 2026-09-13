@@ -19,6 +19,88 @@ const masterVol = ref(0.85);
 const musicVol = ref(0.55);
 const muted = ref(false);
 
+// --- Newbie tutorial ---
+const TUTORIAL_KEY = 'orbloom:tutorialDone';
+const tutorialDone = ref(true);
+const tutorialStep = ref(0);
+let basePlantCount = 0;
+let rotTravel = 0;
+let lastRotY = 0;
+let sawDaylight = false;
+
+const tutorialTexts = [
+  '按住画面拖动，转动星球（惯性会带着它继续转）',
+  '在左侧选择「种草」，点击星球表面种下一丛',
+  '继续转动，让草地进入阳光下',
+  '稍等片刻，看兔子是否跑来吃草',
+  '很好！你已经会照料这颗星球了',
+];
+
+function initTutorial(isContinue: boolean) {
+  if (isContinue || localStorage.getItem(TUTORIAL_KEY)) {
+    tutorialDone.value = true;
+    return;
+  }
+  tutorialDone.value = false;
+  tutorialStep.value = 0;
+  basePlantCount = store.stats.plantCount;
+  peakPlantCount = basePlantCount;
+  rotTravel = 0;
+  lastRotY = 0;
+  sawDaylight = false;
+  stepStartedAt = performance.now();
+}
+
+function skipTutorial() {
+  tutorialDone.value = true;
+  localStorage.setItem(TUTORIAL_KEY, '1');
+}
+
+function advanceTutorial(from: number) {
+  if (tutorialDone.value || tutorialStep.value !== from) return;
+  tutorialStep.value = from + 1;
+  // Reset per-step trackers so the next step cannot complete on leftover state
+  rotTravel = 0;
+  sawDaylight = false;
+  stepStartedAt = performance.now();
+  if (tutorialStep.value >= 4) {
+    window.setTimeout(() => skipTutorial(), 2800);
+  }
+}
+
+let stepStartedAt = 0;
+let peakPlantCount = 0;
+
+function tickTutorial(worldRotY: number, plantCount: number) {
+  if (tutorialDone.value) return;
+
+  const dRot = Math.abs(worldRotY - lastRotY);
+  if (dRot < Math.PI) rotTravel += dRot;
+  lastRotY = worldRotY;
+  if (plantCount > peakPlantCount) peakPlantCount = plantCount;
+
+  const step = tutorialStep.value;
+  if (step === 0) {
+    if (rotTravel > 0.45) advanceTutorial(0);
+    return;
+  }
+  if (step === 1) {
+    if (plantCount > basePlantCount) advanceTutorial(1);
+    return;
+  }
+  if (step === 2) {
+    if (store.hoverLight > 0.45) sawDaylight = true;
+    // Need a bit of rotation AFTER entering this step, plus seeing daylight
+    if (sawDaylight && rotTravel > 0.25) advanceTutorial(2);
+    return;
+  }
+  if (step === 3) {
+    const grazed = plantCount < peakPlantCount;
+    const elapsed = (performance.now() - stepStartedAt) / 1000;
+    if (grazed || elapsed > 28 || store.stats.day > 1) advanceTutorial(3);
+  }
+}
+
 function loadAudioPrefs() {
   try {
     const raw = localStorage.getItem('orbloom:audio');
@@ -130,6 +212,7 @@ onMounted(async () => {
       pendingEvent: world.pendingEvent,
       personality: world.personality,
     });
+    tickTutorial(world.planet.rotationY, world.stats.plantCount);
   }, {
     seed: 42,
     boot: loadedWorld ? { kind: 'loaded', world: loadedWorld } : { kind: 'new', seed: 42 },
@@ -145,6 +228,7 @@ onMounted(async () => {
   } else {
     game.start();
     bootReady.value = false;
+    initTutorial(false);
   }
 });
 
@@ -191,11 +275,11 @@ function setSpeed(v: number) {
 
 function continueGame() {
   if (!game) return;
-  // World was already loaded into Game at mount; just unpause and run.
   game.setSpeed(1);
   store.setSpeed(1);
   game.start();
   bootReady.value = false;
+  initTutorial(true);
   store.flash('继续值日');
 }
 
@@ -207,6 +291,7 @@ function startNewGame() {
     store.setSpeed(1);
     game?.start();
     bootReady.value = false;
+    initTutorial(false);
     store.flash('新的星球苏醒了');
   };
   if (hasExistingSave.value) {
@@ -395,6 +480,14 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
+      </div>
+    </transition>
+
+    <transition name="fade">
+      <div v-if="!tutorialDone && !bootReady" class="tutorial-card">
+        <div class="tutorial-step">引导 {{ Math.min(tutorialStep + 1, 4) }}/4</div>
+        <p>{{ tutorialTexts[Math.min(tutorialStep, 4)] }}</p>
+        <button class="tutorial-skip" @click="skipTutorial">跳过</button>
       </div>
     </transition>
 
@@ -813,6 +906,40 @@ onBeforeUnmount(() => {
   padding: 10px 18px;
   border-radius: 999px;
   font-size: 13px;
+}
+
+.tutorial-card {
+  position: absolute;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  width: min(360px, calc(100% - 40px));
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(14, 24, 44, 0.92);
+  border: 1px solid rgba(150, 210, 180, 0.35);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  text-align: center;
+}
+.tutorial-step {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  opacity: 0.55;
+  margin-bottom: 4px;
+}
+.tutorial-card p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.tutorial-skip {
+  border: none;
+  background: transparent;
+  color: rgba(200, 220, 255, 0.55);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 .event-overlay {

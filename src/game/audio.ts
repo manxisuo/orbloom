@@ -178,7 +178,7 @@ export class AudioBus {
     osc.frequency.setValueAtTime(freq, t0);
     if (slideTo != null) osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain * this._sfxVol), t0 + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     osc.connect(g);
     g.connect(this.master);
@@ -199,7 +199,7 @@ export class AudioBus {
     filter.type = 'lowpass';
     filter.frequency.value = filterHz;
     const g = this.ctx.createGain();
-    g.gain.value = gain;
+    g.gain.value = gain * this._sfxVol;
     src.connect(filter);
     filter.connect(g);
     g.connect(this.master);
