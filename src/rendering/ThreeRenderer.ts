@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { AnimalState, EventId, GameWorldState, PlantState, Vec3Like } from '../shared/types';
 import { lightAmount, SUN_DIRECTION } from '../simulation/climate/light';
 import { waterAt } from '../simulation/ecology/water';
@@ -61,6 +62,7 @@ export class ThreeRenderer {
   private lastPersonality = 'wild';
   private lastMushroomGlow = 0;
   private dayFraction = 0;
+  private waterEnvMap: THREE.Texture | null = null;
   private eventVfx: EventVfx | null = null;
 
   private grassMesh: THREE.InstancedMesh | null = null;
@@ -115,6 +117,16 @@ export class ThreeRenderer {
     this.camera.position.set(0, 0.4, this.camDist);
     this.camera.lookAt(0, 0, 0);
 
+    // Env map only for water materials — NOT scene.environment (that washes out day/night)
+    this.waterEnvMap = null;
+    try {
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      this.waterEnvMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmrem.dispose();
+    } catch {
+      this.waterEnvMap = null;
+    }
+
     // Lights — colors are rewritten every frame by applyTimeOfDay
     this.ambientLight = new THREE.AmbientLight(0x6a7aaa, 0.22);
     this.scene.add(this.ambientLight);
@@ -122,13 +134,16 @@ export class ThreeRenderer {
     this.sunLight = new THREE.DirectionalLight(0xfff2d5, 1.35);
     this.sunLight.position.copy(SUN_DIRECTION).multiplyScalar(12);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.set(1024, 1024);
-    this.sunLight.shadow.camera.near = 1;
-    this.sunLight.shadow.camera.far = 30;
-    this.sunLight.shadow.camera.left = -2.2;
-    this.sunLight.shadow.camera.right = 2.2;
-    this.sunLight.shadow.camera.top = 2.2;
-    this.sunLight.shadow.camera.bottom = -2.2;
+    this.sunLight.shadow.mapSize.set(2048, 2048);
+    this.sunLight.shadow.camera.near = 2;
+    this.sunLight.shadow.camera.far = 20;
+    this.sunLight.shadow.camera.left = -1.6;
+    this.sunLight.shadow.camera.right = 1.6;
+    this.sunLight.shadow.camera.top = 1.6;
+    this.sunLight.shadow.camera.bottom = -1.6;
+    this.sunLight.shadow.bias = -0.0004;
+    this.sunLight.shadow.normalBias = 0.02;
+    this.sunLight.shadow.radius = 4;
     this.scene.add(this.sunLight);
 
     this.fillLight = new THREE.DirectionalLight(0x88a0ff, 0.15);
@@ -339,9 +354,11 @@ export class ThreeRenderer {
     const oceanMat = new THREE.MeshStandardMaterial({
       color: 0x2f7eb8,
       transparent: true,
-      opacity: 0.12,
-      roughness: 0.25,
-      metalness: 0.35,
+      opacity: 0.14,
+      roughness: 0.12,
+      metalness: 0.4,
+      envMap: this.waterEnvMap,
+      envMapIntensity: 0.55,
       flatShading: true,
       depthWrite: false,
     });
@@ -927,20 +944,20 @@ export class ThreeRenderer {
 
   private updateLakes(lakes: GameWorldState['planet']['lakes']): void {
     while (this.lakeMeshes.length < lakes.length) {
-      const mesh = new THREE.Mesh(
-        new THREE.CircleGeometry(1, 32),
-        new THREE.MeshStandardMaterial({
-          color: 0x4aa3e0,
-          transparent: true,
-          opacity: 0.55,
-          roughness: 0.15,
-          metalness: 0.25,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-          polygonOffset: true,
-          polygonOffsetFactor: -2,
-        }),
-      );
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x4aa3e0,
+        transparent: true,
+        opacity: 0.55,
+        roughness: 0.18,
+        metalness: 0.25,
+        envMap: this.waterEnvMap,
+        envMapIntensity: 0.45,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+      });
+      const mesh = new THREE.Mesh(new THREE.CircleGeometry(1, 40), mat);
       this.planetGroup.add(mesh);
       this.lakeMeshes.push(mesh);
     }
@@ -952,7 +969,7 @@ export class ThreeRenderer {
       mesh.position.copy(n).multiplyScalar(1.02 + lake.water * 0.01);
       mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.opacity = 0.25 + lake.water * 0.45;
+      mat.opacity = 0.3 + lake.water * 0.45;
       mesh.visible = lake.water > 0.02;
     });
   }
