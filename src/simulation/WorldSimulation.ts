@@ -84,7 +84,7 @@ export function createWorld(seed = 42): GameWorldState {
       },
     ],
     seed,
-    modifiers: { droughtDays: 0, coldDays: 0 },
+    modifiers: { droughtDays: 0, coldDays: 0, machineScore: 0 },
     pendingEvent: null,
     nextEventIn: 40,
     delayedEvents: [],
@@ -525,6 +525,7 @@ const PERSONALITY_LABEL: Record<string, string> = {
   forest: '森林',
   desert: '荒漠',
   nightGlow: '夜光',
+  mechanical: '机械',
   chaos: '混沌',
 };
 
@@ -542,9 +543,11 @@ function updatePersonality(world: GameWorldState): void {
   const foxes = animals.filter((a) => a.species === 'fox').length;
   const rabbits = animals.filter((a) => a.species === 'rabbit').length;
   const stressed = plants.filter((p) => p.health < 0.35).length / total;
+  const machines = world.modifiers.machineScore ?? 0;
 
   let next: typeof world.personality = 'wild';
   if (stressed > 0.45 || (foxes >= 2 && rabbits < 4)) next = 'chaos';
+  else if (machines >= 3) next = 'mechanical';
   else if (mushrooms >= 6) next = 'nightGlow';
   else if (avgLake < 0.2 && trees < 4) next = 'desert';
   else if (trees >= 10 && avgLake > 0.35) next = 'forest';

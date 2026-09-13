@@ -43,7 +43,12 @@ function migrateV1ToV2(data: AnyRecord): AnyRecord {
     schemaVersion: 2,
     world: {
       ...world,
-      modifiers: (world.modifiers as AnyRecord) ?? { droughtDays: 0, coldDays: 0 },
+      modifiers: {
+        droughtDays: 0,
+        coldDays: 0,
+        machineScore: 0,
+        ...((world.modifiers as AnyRecord) ?? {}),
+      },
       pendingEvent: (world.pendingEvent as AnyRecord) ?? null,
       nextEventIn: typeof world.nextEventIn === 'number' ? world.nextEventIn : 35,
       planet: {

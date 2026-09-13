@@ -55,6 +55,8 @@ export class ThreeRenderer {
   private flockPhase = 0;
   private fireflyPoints: THREE.Points | null = null;
   private fireflyPhase = 0;
+  private machineGroup = new THREE.Group();
+  private machineSpin = 0;
   private personalityTint = new THREE.Color(0x7eb6ff);
   private lastPersonality = 'wild';
   private lastMushroomGlow = 0;
@@ -389,6 +391,53 @@ export class ThreeRenderer {
     this.eventVfx = new EventVfx(this.planetGroup);
     this.buildFlocks();
     this.buildFireflies();
+    this.buildMachines();
+  }
+
+  /** Low-poly beacons / robots that appear on mechanical planets. */
+  private buildMachines(): void {
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0x9aa8b8,
+      metalness: 0.55,
+      roughness: 0.35,
+      flatShading: true,
+    });
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0x7ef0d0 });
+    const spots = [
+      { n: new THREE.Vector3(0.4, 0.35, 0.85).normalize(), s: 1 },
+      { n: new THREE.Vector3(-0.7, 0.2, 0.55).normalize(), s: 0.85 },
+      { n: new THREE.Vector3(0.1, -0.55, 0.8).normalize(), s: 0.75 },
+      { n: new THREE.Vector3(0.85, -0.1, -0.4).normalize(), s: 0.9 },
+    ];
+    for (const spot of spots) {
+      const bot = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.03, 6), bodyMat);
+      const tower = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.04), bodyMat);
+      tower.position.y = 0.045;
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 6), lampMat);
+      lamp.position.y = 0.09;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.012), bodyMat);
+      arm.position.set(0.035, 0.05, 0);
+      bot.add(base, tower, lamp, arm);
+      bot.scale.setScalar(spot.s);
+      const ground = terrainHeightAt(spot.n.x, spot.n.y, spot.n.z);
+      bot.position.copy(spot.n).multiplyScalar(1 + ground + 0.01);
+      bot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), spot.n);
+      bot.visible = false;
+      this.machineGroup.add(bot);
+    }
+    this.planetGroup.add(this.machineGroup);
+  }
+
+  private updateMachines(dt: number, mechanical: boolean): void {
+    this.machineSpin += dt;
+    this.machineGroup.visible = mechanical;
+    if (!mechanical) return;
+    this.machineGroup.children.forEach((bot, i) => {
+      bot.rotateY(dt * (0.4 + i * 0.1));
+      const lamp = bot.children[2] as THREE.Mesh | undefined;
+      if (lamp) lamp.visible = Math.sin(this.machineSpin * 6 + i) > 0;
+    });
   }
 
   private buildFireflies(): void {
@@ -1213,6 +1262,12 @@ export class ThreeRenderer {
         atmo.opacity = 0.14;
         ocean.color.setHex(0x2a5a9a);
         break;
+      case 'mechanical':
+        this.personalityTint.setHex(0x9ab8c8);
+        atmo.color.setHex(0xa8c8d8);
+        atmo.opacity = 0.1;
+        ocean.color.setHex(0x3a6a88);
+        break;
       case 'chaos':
         this.personalityTint.setHex(0xc07070);
         atmo.color.setHex(0xd08080);
@@ -1312,6 +1367,7 @@ export class ThreeRenderer {
     this.oceanMesh.rotation.y += 0.00005;
     this.updateFlocks(dt);
     this.updateFireflies(dt, this.lastPersonality, this.lastMushroomGlow);
+    this.updateMachines(dt, this.lastPersonality === 'mechanical');
     this.eventVfx?.update(dt);
 
     // Keep light/hover fresh while the planet coasts under a still finger/cursor

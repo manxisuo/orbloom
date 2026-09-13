@@ -115,6 +115,8 @@ export class SaveRepository {
 
     if (!Array.isArray(world.delayedEvents)) world.delayedEvents = [];
     if (!world.personality) world.personality = 'wild';
+    if (!world.modifiers) world.modifiers = { droughtDays: 0, coldDays: 0, machineScore: 0 };
+    if (typeof world.modifiers.machineScore !== 'number') world.modifiers.machineScore = 0;
 
     return { meta: save.meta, world };
   }

@@ -123,6 +123,8 @@ export interface WorldModifiers {
   droughtDays: number;
   /** Remaining game-days of extra plant stress */
   coldDays: number;
+  /** Accepted mechanical visitors — drives mechanical personality */
+  machineScore: number;
 };
 
 export type DelayedEventKind = 'birdGift' | 'whisperGift';
@@ -139,6 +141,7 @@ export type PlanetPersonality =
   | 'forest'
   | 'desert'
   | 'nightGlow'
+  | 'mechanical'
   | 'chaos';
 
 export type ToolMode =

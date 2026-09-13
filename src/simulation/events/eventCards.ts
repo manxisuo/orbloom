@@ -132,6 +132,7 @@ export const EVENT_DEFS: EventDef[] = [
     weight: 0.9,
     apply(world, rng) {
       world.resources.stardust += 9;
+      world.modifiers.machineScore = (world.modifiers.machineScore ?? 0) + 1;
       // Repair a weak plant
       const weak = world.plants.filter((p) => p.health < 0.7);
       if (weak.length) {
