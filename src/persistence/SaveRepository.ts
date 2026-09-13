@@ -117,6 +117,9 @@ export class SaveRepository {
     if (!world.personality) world.personality = 'wild';
     if (!world.modifiers) world.modifiers = { droughtDays: 0, coldDays: 0, machineScore: 0 };
     if (typeof world.modifiers.machineScore !== 'number') world.modifiers.machineScore = 0;
+    for (const e of world.log) {
+      if (!e.kind) e.kind = 'life';
+    }
 
     return { meta: save.meta, world };
   }

@@ -92,11 +92,14 @@ export interface EcoStats {
   day: number;
 };
 
+export type LogKind = 'life' | 'plant' | 'animal' | 'event' | 'weather' | 'personality';
+
 export interface LogEntry {
   id: string;
   gameTime: number;
   day: number;
   text: string;
+  kind: LogKind;
 };
 
 export type EventId =

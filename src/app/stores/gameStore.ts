@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { EcoStats, LogEntry, PendingEvent, ToolMode } from '../../shared/types';
+import type { EcoStats, LogEntry, LogKind, PendingEvent, ToolMode } from '../../shared/types';
 
 export type SelectionPanel =
   | {
@@ -30,6 +30,9 @@ export const useGameStore = defineStore('game', () => {
     day: 1,
   });
   const log = ref<LogEntry[]>([]);
+  const logFilter = ref<'all' | LogKind>('all');
+  const replayOpen = ref(false);
+  const replayIndex = ref(0);
   const hoverLight = ref(0);
   const hoverWater = ref(0);
   const hoverLabel = ref('');
@@ -40,6 +43,34 @@ export const useGameStore = defineStore('game', () => {
   let noticeTimer = 0;
 
   const dayLabel = computed(() => stats.value.day || 1);
+
+  const filteredLog = computed(() => {
+    if (logFilter.value === 'all') return log.value;
+    return log.value.filter((e) => e.kind === logFilter.value);
+  });
+
+  /** Milestones for prosperity replay: firsts + personality + rare life. */
+  const replayMilestones = computed(() => {
+    const out: LogEntry[] = [];
+    const seen = new Set<string>();
+    const push = (e: LogEntry | undefined) => {
+      if (!e || seen.has(e.id)) return;
+      seen.add(e.id);
+      out.push(e);
+    };
+    const first = (pred: (e: LogEntry) => boolean) => push(log.value.find(pred));
+    first((e) => e.kind === 'plant' && e.text.includes('种下'));
+    first((e) => e.text.includes('兔子来到了'));
+    first((e) => e.text.includes('小生命'));
+    first((e) => e.text.includes('蜜蜂'));
+    first((e) => e.kind === 'personality');
+    first((e) => e.kind === 'event' && e.text.includes('流星'));
+    first((e) => e.kind === 'event' && e.text.includes('机械'));
+    first((e) => e.text.includes('候鸟如约'));
+    // Keep chronological
+    out.sort((a, b) => a.gameTime - b.gameTime);
+    return out;
+  });
 
   function sync(payload: {
     stardust: number;
@@ -95,6 +126,11 @@ export const useGameStore = defineStore('game', () => {
     personality,
     selection,
     dayLabel,
+    logFilter,
+    filteredLog,
+    replayOpen,
+    replayIndex,
+    replayMilestones,
     sync,
     setTool,
     setSpeed,

@@ -4,6 +4,7 @@ import type {
   EventId,
   GameWorldState,
   LogEntry,
+  LogKind,
   PlantSpecies,
   PlantState,
   Vec3Like,
@@ -81,6 +82,7 @@ export function createWorld(seed = 42): GameWorldState {
         gameTime: 0,
         day: 1,
         text: '星球苏醒了。土壤、一池水，和两颗生命。',
+        kind: 'life' as const,
       },
     ],
     seed,
@@ -192,7 +194,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
         const idx = animals.findIndex((r) => r.id === caught);
         if (idx >= 0) {
           animals.splice(idx, 1);
-          pushLog(world, '一只狐狸捕获了猎物。');
+          pushLog(world, '一只狐狸捕获了猎物。', 'animal');
         }
       }
     } else {
@@ -238,7 +240,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
         const def = pickEvent(mulberry32(Math.floor(world.time.gameTime) + world.seed));
         world.pendingEvent = toPending(def);
         world.nextEventIn = 55 + Math.random() * 40;
-        pushLog(world, `事件：${def.title}`);
+        pushLog(world, `事件：${def.title}`, 'event');
       }
     }
 
@@ -271,7 +273,7 @@ export function resolvePendingEvent(
   const message = typeof result === 'string' ? result : result.message;
   const impact = typeof result === 'string' ? undefined : result.impact;
   world.pendingEvent = null;
-  pushLog(world, message);
+  pushLog(world, message, 'event');
   refreshStats(world);
   return { message, eventId, impact, accepted: accept };
 }
@@ -294,7 +296,7 @@ function maybeSpawnBees(world: GameWorldState): void {
   const bee = makeBee(mulberry32(Math.floor(world.time.gameTime * 100) + bees.length));
   copyV3(bee.position.normal, flower.position.normal);
   world.animals.push(bee);
-  if (bees.length === 0) pushLog(world, '蜜蜂被花海吸引来了。');
+  if (bees.length === 0) pushLog(world, '蜜蜂被花海吸引来了。', 'animal');
 }
 
 function makeBee(rng: () => number): AnimalState {
@@ -370,7 +372,7 @@ function maybeSpawnFoxes(world: GameWorldState): void {
         a.health = Math.max(0, a.health - 0.4);
         if (a.health <= 0.05) {
           world.animals.splice(i, 1);
-          pushLog(world, '狐狸离开了这颗星球。');
+          pushLog(world, '狐狸离开了这颗星球。', 'animal');
         }
       }
     }
@@ -386,7 +388,7 @@ function maybeSpawnFoxes(world: GameWorldState): void {
   const fox = makeFox(mulberry32(Math.floor(world.time.gameTime * 91) + foxes.length));
   jitterNormal(fox.position.normal, prey.position.normal, 0.45);
   world.animals.push(fox);
-  if (foxes.length === 0) pushLog(world, '一只狐狸循着兔群来到了星球。');
+  if (foxes.length === 0) pushLog(world, '一只狐狸循着兔群来到了星球。', 'animal');
 }
 
 export function spawnFoxAt(world: GameWorldState, localNormal: Vec3Like): boolean {
@@ -398,7 +400,7 @@ export function spawnFoxAt(world: GameWorldState, localNormal: Vec3Like): boolea
   copyV3(fox.position.normal, normalize(v3(), localNormal));
   randomTangentSafe(fox.facing, fox.position.normal);
   world.animals.push(fox);
-  pushLog(world, '一只狐狸来到了星球。');
+  pushLog(world, '一只狐狸来到了星球。', 'animal');
   refreshStats(world);
   return true;
 }
@@ -422,7 +424,7 @@ function maybeRabbitLife(world: GameWorldState, dtDays: number): void {
     const a = world.animals[i];
     if (a.species === 'rabbit' && a.health <= 0.02) {
       world.animals.splice(i, 1);
-      if (a.age > 8) pushLog(world, '一只上了年纪的兔子安静地离开了。');
+      if (a.age > 8) pushLog(world, '一只上了年纪的兔子安静地离开了。', 'animal');
     }
   }
 
@@ -450,7 +452,7 @@ function maybeRabbitLife(world: GameWorldState, dtDays: number): void {
       b.breedCooldown = 4;
       a.hunger = Math.min(1, a.hunger + 0.25);
       b.hunger = Math.min(1, b.hunger + 0.25);
-      pushLog(world, kits > 1 ? '一对兔子迎来了两只小生命。' : '一对兔子迎来了一个小生命。');
+      pushLog(world, kits > 1 ? '一对兔子迎来了两只小生命。' : '一对兔子迎来了一个小生命。', 'animal');
       return;
     }
   }
@@ -500,7 +502,7 @@ function tickDelayedEvents(world: GameWorldState): void {
         );
         world.plants.push(makePlant(species, mixed, 0.25 + rng() * 0.2));
       }
-      pushLog(world, '候鸟如约归来，留下了远方的种子。');
+      pushLog(world, '候鸟如约归来，留下了远方的种子。', 'event');
     } else if (ev.kind === 'whisperGift') {
       world.resources.stardust += 8;
       let healed = 0;
@@ -514,6 +516,7 @@ function tickDelayedEvents(world: GameWorldState): void {
       pushLog(
         world,
         healed ? '星球的回响：树木更加葱茏，星尘轻轻洒落。' : '星球的回响：星尘轻轻洒落。',
+        'event',
       );
     }
   }
@@ -558,7 +561,7 @@ function updatePersonality(world: GameWorldState): void {
 
   if (next !== world.personality) {
     world.personality = next;
-    pushLog(world, `星球性情渐显：${PERSONALITY_LABEL[next] ?? next}星球。`);
+    pushLog(world, `星球性情渐显：${PERSONALITY_LABEL[next] ?? next}星球。`, 'personality');
   }
 }
 
@@ -586,7 +589,11 @@ export function plantTreeAt(
   world.resources.stardust -= cost;
   const plant = makePlant(species, cloneV3(localNormal), 0.05);
   world.plants.push(plant);
-  pushLog(world, `种下了${species === 'tree' ? '一棵树' : species === 'grass' ? '一丛草' : species === 'mushroom' ? '一朵发光蘑菇' : '一朵花'}。`);
+  pushLog(
+    world,
+    `种下了${species === 'tree' ? '一棵树' : species === 'grass' ? '一丛草' : species === 'mushroom' ? '一朵发光蘑菇' : '一朵花'}。`,
+    'plant',
+  );
   refreshStats(world);
   return { ok: true };
 }
@@ -600,7 +607,7 @@ export function spawnRabbitAt(world: GameWorldState, localNormal: Vec3Like): boo
   copyV3(rabbit.position.normal, normalize(v3(), localNormal));
   randomTangentSafe(rabbit.facing, rabbit.position.normal);
   world.animals.push(rabbit);
-  pushLog(world, '一只兔子来到了星球。');
+  pushLog(world, '一只兔子来到了星球。', 'animal');
   refreshStats(world);
   return true;
 }
@@ -610,21 +617,22 @@ export function rain(world: GameWorldState): boolean {
   if (world.resources.stardust < cost) return false;
   world.resources.stardust -= cost;
   rainLakes(world.planet.lakes, 0.18);
-  pushLog(world, '一场小雨落下，湖泊丰盈了一些。');
+  pushLog(world, '一场小雨落下，湖泊丰盈了一些。', 'weather');
   refreshStats(world);
   return true;
 }
 
-export function pushLog(world: GameWorldState, text: string): void {
+export function pushLog(world: GameWorldState, text: string, kind: LogKind = 'life'): void {
   const day = Math.floor(world.time.gameTime / world.time.dayLength) + 1;
   const entry: LogEntry = {
     id: nextId('log'),
     gameTime: world.time.gameTime,
     day,
     text: `第 ${day} 天，${text}`,
+    kind,
   };
   world.log.push(entry);
-  if (world.log.length > 80) world.log.splice(0, world.log.length - 80);
+  if (world.log.length > 200) world.log.splice(0, world.log.length - 200);
 }
 
 function makePlant(species: PlantSpecies, normal: Vec3Like, growth: number): PlantState {

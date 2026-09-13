@@ -208,7 +208,7 @@ onMounted(async () => {
       stardust: world.resources.stardust,
       speed: world.time.speed,
       stats: world.stats,
-      log: world.log.slice(-14).reverse(),
+      log: world.log.slice(-60).reverse(),
       hoverLight,
       hoverWater,
       hoverLabel,
@@ -244,6 +244,49 @@ function clearSelection() {
   game?.clearSelection();
   store.flash('已取消选中');
 }
+
+const logFilters = [
+  { id: 'all' as const, label: '全部' },
+  { id: 'plant' as const, label: '种植' },
+  { id: 'animal' as const, label: '生命' },
+  { id: 'event' as const, label: '事件' },
+  { id: 'weather' as const, label: '天候' },
+  { id: 'personality' as const, label: '性情' },
+];
+
+let replayTimer = 0;
+
+function startReplay() {
+  if (!store.replayMilestones.length) {
+    store.flash('还没有足够的故事可回放');
+    return;
+  }
+  store.replayOpen = true;
+  store.replayIndex = 0;
+  window.clearInterval(replayTimer);
+  replayTimer = window.setInterval(() => {
+    if (!store.replayOpen) {
+      window.clearInterval(replayTimer);
+      return;
+    }
+    if (store.replayIndex < store.replayMilestones.length - 1) {
+      store.replayIndex += 1;
+    } else {
+      window.clearInterval(replayTimer);
+    }
+  }, 2800);
+}
+
+function stopReplay() {
+  store.replayOpen = false;
+  window.clearInterval(replayTimer);
+}
+
+onBeforeUnmount(() => {
+  window.clearInterval(replayTimer);
+  game?.dispose();
+  game = null;
+});
 
 function speciesName(s: string) {
   return s === 'tree' ? '树木' : s === 'grass' ? '草地' : s === 'mushroom' ? '发光蘑菇' : '花朵';
@@ -359,11 +402,6 @@ async function manualSave() {
     store.flash(`存档失败：${game.saveError}`);
   }
 }
-
-onBeforeUnmount(() => {
-  game?.dispose();
-  game = null;
-});
 </script>
 
 <template>
@@ -512,9 +550,21 @@ onBeforeUnmount(() => {
       </div>
       <div class="hover-line">{{ store.hoverLabel }}</div>
       <div class="panel-title log-title">星球日志</div>
+      <div class="log-filters">
+        <button
+          v-for="f in logFilters"
+          :key="f.id"
+          class="log-chip"
+          :class="{ active: store.logFilter === f.id }"
+          @click="store.logFilter = f.id"
+        >
+          {{ f.label }}
+        </button>
+      </div>
       <ul class="log">
-        <li v-for="e in store.log" :key="e.id">{{ e.text }}</li>
+        <li v-for="e in store.filteredLog" :key="e.id" :data-kind="e.kind">{{ e.text }}</li>
       </ul>
+      <button class="tool-btn replay-btn" @click="startReplay">繁荣回放</button>
       <button class="tool-btn stats-close" @click="showStats = false">收起</button>
     </aside>
 
@@ -527,6 +577,25 @@ onBeforeUnmount(() => {
           <b>{{ row.value }}</b>
         </div>
         <button class="tool-btn" @click="clearSelection">关闭</button>
+      </div>
+    </transition>
+
+    <transition name="fade">
+      <div v-if="store.replayOpen" class="replay-overlay" @click.self="stopReplay">
+        <div class="replay-card">
+          <div class="replay-kicker">繁荣回放</div>
+          <p class="replay-text">
+            {{ store.replayMilestones[store.replayIndex]?.text }}
+          </p>
+          <div class="replay-dots">
+            <span
+              v-for="(m, i) in store.replayMilestones"
+              :key="m.id"
+              :class="{ on: i === store.replayIndex }"
+            />
+          </div>
+          <button class="tool-btn" @click="stopReplay">结束回放</button>
+        </div>
       </div>
     </transition>
 
@@ -979,6 +1048,84 @@ onBeforeUnmount(() => {
 
 .log-title {
   margin-top: 6px;
+}
+.log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.log-chip {
+  border: 1px solid rgba(160, 190, 230, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c9d6f0;
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 99px;
+  cursor: pointer;
+}
+.log-chip.active {
+  background: rgba(140, 200, 255, 0.2);
+  color: #fff;
+}
+.replay-btn {
+  margin-top: 6px;
+  justify-content: center;
+}
+.replay-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 8, 18, 0.72);
+  backdrop-filter: blur(6px);
+}
+.replay-card {
+  width: min(400px, calc(100% - 36px));
+  padding: 28px 24px 20px;
+  border-radius: 18px;
+  background: rgba(12, 20, 40, 0.94);
+  border: 1px solid rgba(180, 200, 240, 0.28);
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.replay-kicker {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  opacity: 0.55;
+  margin-bottom: 12px;
+}
+.replay-text {
+  margin: 0 0 18px;
+  font-size: 16px;
+  line-height: 1.6;
+  min-height: 3.2em;
+}
+.replay-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.replay-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+}
+.replay-dots span.on {
+  background: #9be38a;
+  box-shadow: 0 0 8px #9be38a;
+}
+.log li[data-kind='event'] {
+  border-left-color: #f0d78c;
+}
+.log li[data-kind='personality'] {
+  border-left-color: #c4b8ff;
+}
+.log li[data-kind='animal'] {
+  border-left-color: #9be38a;
 }
 .log {
   list-style: none;
