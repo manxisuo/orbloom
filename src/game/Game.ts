@@ -197,6 +197,7 @@ export class Game {
       audioBus.eventAccept();
       if (result.eventId === 'meteor') audioBus.meteor();
       if (result.eventId === 'migratingBirds') audioBus.birds();
+      if (result.eventId === 'gentleRain') audioBus.rain();
     } else {
       audioBus.eventDecline();
     }

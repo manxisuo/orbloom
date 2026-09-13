@@ -1,5 +1,5 @@
 import type { EventId, GameWorldState, PendingEvent, Vec3Like } from '../../shared/types';
-import { nextId, randomOnSphere, v3 } from '../../shared/math';
+import { nextId, normalize, randomOnSphere, v3 } from '../../shared/math';
 import { makePlantForEvent } from '../WorldSimulation';
 
 export interface EventApplyResult {
@@ -121,6 +121,103 @@ export const EVENT_DEFS: EventDef[] = [
     },
     decline() {
       return '候鸟转向远方。';
+    },
+  },
+  {
+    id: 'mechanicalVisitor',
+    title: '机械访客',
+    body: '一台小小的维修机器人路过。它可帮忙巡查设施，并留下一些可用的星尘零件。',
+    acceptLabel: '欢迎停靠',
+    declineLabel: '不必了',
+    weight: 0.9,
+    apply(world, rng) {
+      world.resources.stardust += 9;
+      // Repair a weak plant
+      const weak = world.plants.filter((p) => p.health < 0.7);
+      if (weak.length) {
+        const p = weak[Math.floor(rng() * weak.length)];
+        p.health = Math.min(1, p.health + 0.35);
+        return {
+          message: '机器人修好了附近一株植物，留下零件离去。',
+          impact: p.position.normal,
+        };
+      }
+      const n = randomOnSphere(v3(), rng);
+      return { message: '机器人转了一圈，卸下几枚零件星尘。', impact: n };
+    },
+    decline() {
+      return '机器人礼貌地驶向远方。';
+    },
+  },
+  {
+    id: 'planetWhisper',
+    title: '星球低语',
+    body: '星球似乎在请求一片更浓的绿意。种下几棵树，也许会得到回报。',
+    acceptLabel: '为它种树',
+    declineLabel: '下次吧',
+    weight: 1.1,
+    apply(world, rng) {
+      const n = randomOnSphere(v3(), rng);
+      for (let i = 0; i < 3; i++) {
+        const jitter = randomOnSphere(v3(), rng);
+        const mixed = normalize(
+          v3(),
+          v3(
+            n.x + (jitter.x - n.x) * 0.18,
+            n.y + (jitter.y - n.y) * 0.18,
+            n.z + (jitter.z - n.z) * 0.18,
+          ),
+        );
+        world.plants.push(makePlantForEvent('tree', mixed, 0.15 + rng() * 0.1));
+      }
+      world.resources.stardust += 5;
+      world.delayedEvents.push({
+        kind: 'whisperGift',
+        fireAt: world.time.gameTime + world.time.dayLength * 1.8,
+      });
+      return { message: '三株新树扎根了。星球发出满足的轻响。', impact: n };
+    },
+    decline() {
+      return '低语渐渐散去。';
+    },
+  },
+  {
+    id: 'gentleRain',
+    title: '温柔的雨',
+    body: '云层聚拢，一场及时雨即将落下。湖泊会丰盈一些。',
+    acceptLabel: '迎接雨水',
+    declineLabel: '避开云层',
+    weight: 1,
+    apply(world) {
+      for (const lake of world.planet.lakes) {
+        lake.water = Math.min(1, lake.water + 0.22);
+      }
+      return { message: '细雨落下，湖面微微上涨。' };
+    },
+    decline() {
+      return '云从旁边飘走了。';
+    },
+  },
+  {
+    id: 'wildHarvest',
+    title: '丰饶时刻',
+    body: '生态稳定，动物与植物都在繁荣。收下这份自然的馈赠？',
+    acceptLabel: '接受馈赠',
+    declineLabel: '留给星球',
+    weight: 0.85,
+    apply(world, rng) {
+      const gain = 6 + Math.floor(world.stats.stability * 10);
+      world.resources.stardust += gain;
+      // Slight heal on a few plants
+      for (let i = 0; i < 4 && i < world.plants.length; i++) {
+        const p = world.plants[Math.floor(rng() * world.plants.length)];
+        p.health = Math.min(1, p.health + 0.12);
+        p.growth = Math.min(1, p.growth + 0.06);
+      }
+      return { message: `自然回赠了 ${gain} 枚星尘。` };
+    },
+    decline() {
+      return '你选择把丰饶留给星球本身。';
     },
   },
 ];

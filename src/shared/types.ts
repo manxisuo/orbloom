@@ -104,7 +104,11 @@ export type EventId =
   | 'coldNight'
   | 'drought'
   | 'strangeSeed'
-  | 'migratingBirds';
+  | 'migratingBirds'
+  | 'mechanicalVisitor'
+  | 'planetWhisper'
+  | 'gentleRain'
+  | 'wildHarvest';
 
 export interface PendingEvent {
   id: EventId;
@@ -121,7 +125,7 @@ export interface WorldModifiers {
   coldDays: number;
 };
 
-export type DelayedEventKind = 'birdGift';
+export type DelayedEventKind = 'birdGift' | 'whisperGift';
 
 export interface DelayedEvent {
   kind: DelayedEventKind;

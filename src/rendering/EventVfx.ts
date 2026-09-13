@@ -39,6 +39,18 @@ export class EventVfx {
       case 'migratingBirds':
         this.playBirds(radius);
         break;
+      case 'mechanicalVisitor':
+        this.playMech(localNormal, radius);
+        break;
+      case 'planetWhisper':
+        this.playSeed(localNormal, radius);
+        break;
+      case 'gentleRain':
+        this.playRainVeil();
+        break;
+      case 'wildHarvest':
+        this.playSeed(null, radius);
+        break;
     }
   }
 
@@ -205,6 +217,72 @@ export class EventVfx {
           const m = (c as THREE.Mesh).material as THREE.MeshBasicMaterial;
           m.opacity = Math.max(0, 0.95 * (1 - fx.t / 1.8));
         });
+      },
+    });
+  }
+
+  private playMech(n: Vec3Like | null, radius: number): void {
+    const p = this.surfacePoint(n, radius);
+    const bot = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.05, 0.04, 0.06),
+      new THREE.MeshStandardMaterial({ color: 0x9aa8b8, flatShading: true, metalness: 0.4, roughness: 0.4 }),
+    );
+    const lamp = new THREE.Mesh(
+      new THREE.SphereGeometry(0.012, 6, 6),
+      new THREE.MeshBasicMaterial({ color: 0x88ffcc }),
+    );
+    lamp.position.set(0, 0.03, 0.02);
+    bot.add(body, lamp);
+    bot.position.copy(p).multiplyScalar(1.02);
+    bot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p.clone().normalize());
+    this.group.add(bot);
+    this.active.push({
+      obj: bot,
+      t: 0,
+      life: 2.4,
+      update: (fx) => {
+        bot.rotateY(0.8 * (1 / 60));
+        lamp.visible = Math.sin(fx.t * 12) > 0;
+        bot.position.copy(p).multiplyScalar(1.02 + Math.sin(fx.t * 4) * 0.01);
+        if (fx.t > 1.8) {
+          bot.scale.setScalar(Math.max(0.01, 1 - (fx.t - 1.8) / 0.6));
+        }
+      },
+    });
+  }
+
+  private playRainVeil(): void {
+    const count = 100;
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const r = 1.1 + Math.random() * 0.5;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.cos(phi);
+      pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({
+        color: 0x88c8ff,
+        size: 0.03,
+        transparent: true,
+        opacity: 0.75,
+        depthWrite: false,
+      }),
+    );
+    this.group.add(pts);
+    this.active.push({
+      obj: pts,
+      t: 0,
+      life: 2.8,
+      update: (fx) => {
+        pts.position.y = -0.2 * fx.t;
+        (pts.material as THREE.PointsMaterial).opacity = Math.max(0, 0.75 * (1 - fx.t / 2.8));
       },
     });
   }

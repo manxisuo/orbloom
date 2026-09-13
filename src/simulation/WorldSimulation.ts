@@ -501,6 +501,20 @@ function tickDelayedEvents(world: GameWorldState): void {
         world.plants.push(makePlant(species, mixed, 0.25 + rng() * 0.2));
       }
       pushLog(world, '候鸟如约归来，留下了远方的种子。');
+    } else if (ev.kind === 'whisperGift') {
+      world.resources.stardust += 8;
+      let healed = 0;
+      for (const p of world.plants) {
+        if (p.species === 'tree') {
+          p.health = Math.min(1, p.health + 0.2);
+          p.growth = Math.min(1, p.growth + 0.12);
+          healed++;
+        }
+      }
+      pushLog(
+        world,
+        healed ? '星球的回响：树木更加葱茏，星尘轻轻洒落。' : '星球的回响：星尘轻轻洒落。',
+      );
     }
   }
 }
