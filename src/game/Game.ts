@@ -11,6 +11,7 @@ import { plantTreeAt, rain, resolvePendingEvent, spawnFoxAt, spawnRabbitAt } fro
 import { ThreeRenderer } from '../rendering/ThreeRenderer';
 import type { SaveRepository } from '../persistence/SaveRepository';
 import type { SaveMeta } from '../persistence/types';
+import { audioBus } from './audio';
 
 export type HoverInfo =
   | { kind: 'surface'; light: number; water: number; localNormal: Vec3Like }
@@ -43,6 +44,8 @@ export class Game {
   private autosaveAcc = 0;
   private saveRepo: SaveRepository | null = null;
   private saving = false;
+  private lastDayFraction = 0;
+  private hadPendingEvent = false;
   private onBeforeUnload = () => {
     void this.saveNow('autosave');
   };
@@ -70,7 +73,9 @@ export class Game {
     this.onNotify = options.onNotify ?? null;
     this.saveRepo = options.saveRepository ?? null;
     this.renderer = new ThreeRenderer(canvas, {
-      onPointerDown: () => {},
+      onPointerDown: () => {
+        audioBus.unlock();
+      },
       onRotate: (dx, dy) => this.rotatePlanet(dx, dy),
       onZoom: (delta) => this.zoom(delta),
       onHover: (hit) => this.handleHover(hit),
@@ -94,6 +99,10 @@ export class Game {
       tickWorld(this.world, this.budget, dt);
       this.renderer.syncWorld(this.world);
       this.renderer.render(dt);
+      this.checkDayNightChime();
+      const pending = !!this.world.pendingEvent;
+      if (pending && !this.hadPendingEvent) audioBus.eventOpen();
+      this.hadPendingEvent = pending;
 
       this.autosaveAcc += dt;
       if (this.autosaveAcc >= AUTOSAVE_SECONDS) {
@@ -114,6 +123,7 @@ export class Game {
   dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
+    audioBus.stopAmbient();
     window.removeEventListener('beforeunload', this.onBeforeUnload);
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.renderer.dispose();
@@ -163,7 +173,15 @@ export class Game {
   }
 
   doRain(): void {
-    rain(this.world);
+    if (rain(this.world)) audioBus.rain();
+  }
+
+  private checkDayNightChime(): void {
+    const f = this.world.stats.dayFraction;
+    // Crossing into day (~0) or night (~0.5)
+    if (this.lastDayFraction < 0.5 && f >= 0.5) audioBus.nightChime();
+    if (this.lastDayFraction > 0.5 && f <= 0.5) audioBus.dayChime();
+    this.lastDayFraction = f;
   }
 
   get pendingEvent(): PendingEvent | null {
@@ -176,6 +194,11 @@ export class Game {
     this.notify(result.message);
     if (accept) {
       this.renderer.playEventVfx(result.eventId, result.impact ?? null);
+      audioBus.eventAccept();
+      if (result.eventId === 'meteor') audioBus.meteor();
+      if (result.eventId === 'migratingBirds') audioBus.birds();
+    } else {
+      audioBus.eventDecline();
     }
   }
 
@@ -225,8 +248,10 @@ export class Game {
     if (!hit) return;
 
     if (this.tool === 'rain') {
-      rain(this.world);
-      this.notify('降下一场小雨');
+      if (rain(this.world)) {
+        audioBus.rain();
+        this.notify('降下一场小雨');
+      }
       return;
     }
 
@@ -241,6 +266,8 @@ export class Game {
       const result = plantTreeAt(this.world, surface.localNormal, species);
       if (!result.ok) {
         this.notify(this.plantFailText(result.reason, species));
+      } else {
+        audioBus.plant();
       }
       return;
     }

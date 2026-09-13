@@ -6,12 +6,53 @@ import type { ToolMode } from '../../shared/types';
 import { createSaveRepository } from '../../persistence';
 import type { SaveMeta } from '../../persistence/types';
 import { personalityLabel as personalityName } from '../../simulation/WorldSimulation';
+import { audioBus } from '../../game/audio';
 
 const store = useGameStore();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 let game: Game | null = null;
 
 const personalityLabel = computed(() => personalityName(store.personality));
+
+const showSettings = ref(false);
+const masterVol = ref(0.85);
+const musicVol = ref(0.55);
+const muted = ref(false);
+
+function loadAudioPrefs() {
+  try {
+    const raw = localStorage.getItem('orbloom:audio');
+    if (!raw) return;
+    const p = JSON.parse(raw) as { master?: number; music?: number; muted?: boolean };
+    if (typeof p.master === 'number') masterVol.value = p.master;
+    if (typeof p.music === 'number') musicVol.value = p.music;
+    if (typeof p.muted === 'boolean') muted.value = p.muted;
+  } catch {
+    /* ignore */
+  }
+  applyAudioPrefs();
+}
+
+function applyAudioPrefs() {
+  audioBus.setMasterVolume(masterVol.value);
+  audioBus.setMusicVolume(musicVol.value);
+  audioBus.muted = muted.value;
+  localStorage.setItem(
+    'orbloom:audio',
+    JSON.stringify({ master: masterVol.value, music: musicVol.value, muted: muted.value }),
+  );
+}
+
+function onMasterVol() {
+  applyAudioPrefs();
+}
+function onMusicVol() {
+  applyAudioPrefs();
+}
+function toggleMute() {
+  muted.value = !muted.value;
+  applyAudioPrefs();
+}
 
 const repo = createSaveRepository('auto');
 
@@ -40,6 +81,7 @@ const speeds = [
 ];
 
 onMounted(async () => {
+  loadAudioPrefs();
   const canvas = canvasRef.value;
   if (!canvas) return;
 
@@ -242,6 +284,7 @@ onBeforeUnmount(() => {
       <button class="save-btn" :disabled="saving" @click="manualSave">
         {{ saving ? '存档中…' : '存档' }}
       </button>
+      <button class="save-btn" @click="showSettings = !showSettings">设置</button>
 
       <div class="speed-group">
         <button
@@ -255,6 +298,38 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </header>
+
+    <transition name="fade">
+      <div v-if="showSettings" class="hud settings-panel">
+        <div class="panel-title">声音</div>
+        <label class="vol-row">
+          <span>总音量</span>
+          <input
+            v-model.number="masterVol"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            @input="onMasterVol"
+          />
+          <b>{{ Math.round(masterVol * 100) }}</b>
+        </label>
+        <label class="vol-row">
+          <span>音乐</span>
+          <input
+            v-model.number="musicVol"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            @input="onMusicVol"
+          />
+          <b>{{ Math.round(musicVol * 100) }}</b>
+        </label>
+        <button class="tool-btn" @click="toggleMute">{{ muted ? '取消静音' : '静音' }}</button>
+        <p class="hint">首次点击画面后才会出声</p>
+      </div>
+    </transition>
 
     <!-- Left tools -->
     <aside class="hud tool-panel">
@@ -543,6 +618,33 @@ onBeforeUnmount(() => {
 .save-btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.settings-panel {
+  top: 68px;
+  right: 14px;
+  width: 220px;
+  padding: 12px 14px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.vol-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 32px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.vol-row input[type='range'] {
+  width: 100%;
+  accent-color: #7ec8a0;
+}
+.vol-row b {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
 }
 
 .speed-group {
