@@ -102,7 +102,9 @@ export class SaveRepository {
       if (!f || !Number.isFinite(f.x) || !Number.isFinite(f.y) || !Number.isFinite(f.z)) {
         a.facing = { x: 1, y: 0, z: 0 };
       }
-      const okStates = new Set(['wander', 'seekFood', 'eat', 'sleep', 'seekFlower', 'pollinate']);
+      const okStates = new Set([
+        'wander', 'seekFood', 'eat', 'sleep', 'seekFlower', 'pollinate', 'flee', 'hunt',
+      ]);
       if (!okStates.has(a.state)) a.state = 'wander';
       if (!Number.isFinite(a.hunger)) a.hunger = 0.4;
       if (!Number.isFinite(a.health)) a.health = 1;

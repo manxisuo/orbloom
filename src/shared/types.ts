@@ -7,7 +7,7 @@ export interface SurfacePosition {
 }
 
 export type PlantSpecies = 'tree' | 'grass' | 'flower';
-export type AnimalSpecies = 'rabbit' | 'bee';
+export type AnimalSpecies = 'rabbit' | 'bee' | 'fox';
 
 export type AnimalBrainState =
   | 'wander'
@@ -15,7 +15,9 @@ export type AnimalBrainState =
   | 'eat'
   | 'sleep'
   | 'seekFlower'
-  | 'pollinate';
+  | 'pollinate'
+  | 'flee'
+  | 'hunt';
 
 export interface PlantState {
   id: string;
@@ -119,7 +121,14 @@ export interface WorldModifiers {
   coldDays: number;
 };
 
-export type ToolMode = 'inspect' | 'plant-tree' | 'plant-grass' | 'plant-flower' | 'spawn-rabbit' | 'rain';
+export type ToolMode =
+  | 'inspect'
+  | 'plant-tree'
+  | 'plant-grass'
+  | 'plant-flower'
+  | 'spawn-rabbit'
+  | 'spawn-fox'
+  | 'rain';
 
 export interface GameWorldState {
   planet: PlanetState;

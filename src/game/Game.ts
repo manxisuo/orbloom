@@ -7,7 +7,7 @@ import type {
   Vec3Like,
 } from '../shared/types';
 import { createBudget, createWorld, tickWorld, type SimBudget } from '../simulation/WorldSimulation';
-import { plantTreeAt, rain, resolvePendingEvent, spawnRabbitAt } from '../simulation/WorldSimulation';
+import { plantTreeAt, rain, resolvePendingEvent, spawnFoxAt, spawnRabbitAt } from '../simulation/WorldSimulation';
 import { ThreeRenderer } from '../rendering/ThreeRenderer';
 import type { SaveRepository } from '../persistence/SaveRepository';
 import type { SaveMeta } from '../persistence/types';
@@ -241,10 +241,17 @@ export class Game {
       return;
     }
 
-    if (this.tool === 'spawn-rabbit') {
+    if (this.tool === 'spawn-rabbit' || this.tool === 'spawn-fox') {
       const surface = hit.type === 'surface' ? hit : this.renderer.pickSurface();
       if (!surface) {
         this.notify('请点击星球表面');
+        return;
+      }
+      if (this.tool === 'spawn-fox') {
+        const ok = spawnFoxAt(this.world, surface.localNormal);
+        if (!ok) {
+          this.notify(this.world.resources.stardust < 10 ? '星尘不足（引狐需 10）' : '狐狸已经够多了');
+        }
         return;
       }
       const result = spawnRabbitAt(this.world, surface.localNormal);

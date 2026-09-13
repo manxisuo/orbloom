@@ -10,6 +10,7 @@ import {
 } from '../../shared/math';
 import { lightBand } from '../climate/light';
 import { forageAt } from '../ecology/growth';
+import { rabbitFleeFromFox } from './fox';
 
 const WALK_SPEED = 0.35;
 const DECISION_INTERVAL = 0.2;
@@ -23,14 +24,22 @@ export function updateRabbit(
   light: number,
   dt: number,
   decisionClock: number,
+  foxes: AnimalState[] = [],
 ): void {
   rabbit.hopPhase += dt * 8;
   rabbit.hunger = Math.min(1, rabbit.hunger + dt * 0.04);
 
   const band = lightBand(light);
 
+  // Flee overrides everything except being eaten
+  if (foxes.length && rabbitFleeFromFox(rabbit, foxes, dt)) {
+    return;
+  }
+  if (rabbit.state === 'flee') {
+    rabbit.state = 'wander';
+  }
+
   // Never hard-freeze. Night = slow idle; day = normal activity.
-  // (Sleep state kept for UI/compat but does not stop movement.)
   if (band === 'night' && rabbit.hunger < 0.75) {
     if (rabbit.state !== 'eat') rabbit.state = 'sleep';
   } else if (rabbit.state === 'sleep') {
@@ -42,7 +51,6 @@ export function updateRabbit(
     decide(rabbit, plants, band);
   }
 
-  // Movement always runs — including "sleep" (slow shuffle)
   const nightMul = band === 'night' ? 0.25 : band === 'dusk' ? 0.7 : 1;
 
   switch (rabbit.state) {

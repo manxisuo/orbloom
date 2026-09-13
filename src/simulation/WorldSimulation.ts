@@ -23,6 +23,7 @@ import { evaporateLakes, rainLakes, waterAt } from './ecology/water';
 import { updatePlant } from './ecology/growth';
 import { RABBIT_DECISION_INTERVAL, updateRabbit } from './behaviors/rabbit';
 import { updateBee } from './behaviors/bee';
+import { updateFox } from './behaviors/fox';
 import { treeShadeAt } from './ecology/shade';
 import { terrainHeightAt } from '../shared/terrain';
 import { findEventDef, pickEvent, toPending } from './events/eventCards';
@@ -176,13 +177,23 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     doDecision = true;
   }
 
+  const foxes = animals.filter((a) => a.species === 'fox');
   for (const animal of animals) {
     localToWorldNormal(tmpWorld, animal.position.normal, planet.rotationX, planet.rotationY);
     const light = lightAmount(tmpWorld, SUN_DIRECTION);
     if (animal.species === 'bee') {
       updateBee(animal, plants, light, dt, doDecision);
+    } else if (animal.species === 'fox') {
+      const { caught } = updateFox(animal, animals.filter((r) => r.species === 'rabbit'), dt, doDecision);
+      if (caught) {
+        const idx = animals.findIndex((r) => r.id === caught);
+        if (idx >= 0) {
+          animals.splice(idx, 1);
+          pushLog(world, '一只狐狸捕获了猎物。');
+        }
+      }
     } else {
-      updateRabbit(animal, plants, light, dt, doDecision ? 0 : 1);
+      updateRabbit(animal, plants, light, dt, doDecision ? 0 : 1, foxes);
     }
   }
 
@@ -213,6 +224,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     // Bees appear when enough mature flowers exist
     maybeSpawnBees(world);
     maybeRabbitLife(world, dtLakeDays);
+    maybeSpawnFoxes(world);
 
     // Event cards
     if (!world.pendingEvent) {
@@ -310,6 +322,72 @@ function makeRabbit(rng: () => number, age = 0.8 + rng() * 1.2): AnimalState {
     age,
     breedCooldown: rng() * 2,
   };
+}
+
+function makeFox(rng: () => number): AnimalState {
+  const normal = randomOnSphere(v3(), rng);
+  const facing = v3();
+  randomTangentSafe(facing, normal);
+  return {
+    id: nextId('animal'),
+    species: 'fox',
+    position: { normal, altitude: 0 },
+    facing,
+    health: 1,
+    hunger: 0.5,
+    state: 'wander',
+    stateTimer: 0,
+    targetPlantId: null,
+    hopPhase: rng() * Math.PI * 2,
+    age: 1.5,
+    breedCooldown: 999,
+  };
+}
+
+/** Foxes arrive when rabbits overcrowd; leave if prey is scarce. */
+function maybeSpawnFoxes(world: GameWorldState): void {
+  const foxes = world.animals.filter((a) => a.species === 'fox');
+  const rabbits = world.animals.filter((a) => a.species === 'rabbit');
+
+  // Starve out foxes when few rabbits
+  if (foxes.length && rabbits.length < 3) {
+    for (let i = world.animals.length - 1; i >= 0; i--) {
+      const a = world.animals[i];
+      if (a.species === 'fox') {
+        a.health = Math.max(0, a.health - 0.4);
+        if (a.health <= 0.05) {
+          world.animals.splice(i, 1);
+          pushLog(world, '狐狸离开了这颗星球。');
+        }
+      }
+    }
+    return;
+  }
+
+  if (foxes.length >= 3) return;
+  if (rabbits.length < 8) return;
+  if (Math.random() > 0.2) return;
+
+  // Spawn near a random rabbit so the hunt is visible
+  const prey = rabbits[Math.floor(Math.random() * rabbits.length)];
+  const fox = makeFox(mulberry32(Math.floor(world.time.gameTime * 91) + foxes.length));
+  jitterNormal(fox.position.normal, prey.position.normal, 0.45);
+  world.animals.push(fox);
+  if (foxes.length === 0) pushLog(world, '一只狐狸循着兔群来到了星球。');
+}
+
+export function spawnFoxAt(world: GameWorldState, localNormal: Vec3Like): boolean {
+  const cost = 10;
+  if (world.resources.stardust < cost) return false;
+  if (world.animals.filter((a) => a.species === 'fox').length >= 4) return false;
+  world.resources.stardust -= cost;
+  const fox = makeFox(mulberry32(Math.floor(world.time.gameTime * 1000) + 17));
+  copyV3(fox.position.normal, normalize(v3(), localNormal));
+  randomTangentSafe(fox.facing, fox.position.normal);
+  world.animals.push(fox);
+  pushLog(world, '一只狐狸来到了星球。');
+  refreshStats(world);
+  return true;
 }
 
 /** Rabbits breed when well-fed adults meet; elders pass on. */

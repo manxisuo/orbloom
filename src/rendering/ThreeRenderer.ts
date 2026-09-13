@@ -833,37 +833,59 @@ export class ThreeRenderer {
     const root = new THREE.Group();
     root.name = animal.id;
 
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf0ebe3, flatShading: true, roughness: 0.8 });
-    const pinkMat = new THREE.MeshStandardMaterial({ color: 0xf0b6c8, flatShading: true, roughness: 0.8 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x333333, flatShading: true });
+    const isFox = animal.species === 'fox';
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: isFox ? 0xe07a3a : 0xf0ebe3,
+      flatShading: true,
+      roughness: 0.85,
+    });
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: isFox ? 0xf5f0e8 : 0xf0b6c8,
+      flatShading: true,
+      roughness: 0.8,
+    });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, flatShading: true });
 
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), bodyMat);
-    body.scale.set(1.1, 0.9, 1.3);
-    body.position.y = 0.05;
+    const body = new THREE.Mesh(new THREE.SphereGeometry(isFox ? 0.05 : 0.045, 6, 5), bodyMat);
+    body.scale.set(isFox ? 1.0 : 1.1, isFox ? 0.75 : 0.9, isFox ? 1.55 : 1.3);
+    body.position.y = 0.048;
     body.castShadow = true;
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.032, 6, 5), bodyMat);
-    head.position.set(0, 0.07, 0.05);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(isFox ? 0.028 : 0.032, 6, 5), bodyMat);
+    head.position.set(0, isFox ? 0.065 : 0.07, isFox ? 0.058 : 0.05);
     head.castShadow = true;
 
-    const earL = new THREE.Mesh(new THREE.CapsuleGeometry(0.008, 0.04, 2, 4), bodyMat);
-    earL.position.set(-0.016, 0.115, 0.045);
-    earL.rotation.x = 0.3;
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.03, 5), accentMat);
+    snout.rotation.x = Math.PI / 2;
+    snout.position.set(0, isFox ? 0.058 : 0.062, isFox ? 0.082 : 0.078);
+
+    const earL = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.028, 4), bodyMat);
+    earL.position.set(-0.016, isFox ? 0.1 : 0.11, isFox ? 0.05 : 0.04);
     const earR = earL.clone();
     earR.position.x = 0.016;
 
-    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.01, 4, 4), pinkMat);
-    nose.position.set(0, 0.065, 0.082);
-
     const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.006, 4, 4), darkMat);
-    eyeL.position.set(-0.015, 0.078, 0.07);
+    eyeL.position.set(-0.014, isFox ? 0.072 : 0.078, isFox ? 0.072 : 0.068);
     const eyeR = eyeL.clone();
-    eyeR.position.x = 0.015;
+    eyeR.position.x = 0.014;
 
-    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.015, 4, 4), bodyMat);
-    tail.position.set(0, 0.05, -0.058);
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.008, 4, 4), darkMat);
+    nose.position.set(0, isFox ? 0.058 : 0.062, isFox ? 0.095 : 0.09);
 
-    root.add(body, head, earL, earR, nose, eyeL, eyeR, tail);
+    // Fox: bushy tail; rabbit: puff tail
+    const tail = new THREE.Mesh(
+      isFox ? new THREE.ConeGeometry(0.022, 0.07, 5) : new THREE.SphereGeometry(0.015, 4, 4),
+      isFox ? bodyMat : bodyMat,
+    );
+    if (isFox) {
+      tail.rotation.x = -0.9;
+      tail.position.set(0, 0.07, -0.07);
+    } else {
+      tail.position.set(0, 0.05, -0.058);
+    }
+    tail.castShadow = true;
+
+    root.add(body, head, snout, earL, earR, eyeL, eyeR, nose, tail);
     return { root, animal };
   }
 
