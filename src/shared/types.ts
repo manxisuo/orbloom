@@ -7,9 +7,15 @@ export interface SurfacePosition {
 }
 
 export type PlantSpecies = 'tree' | 'grass' | 'flower';
-export type AnimalSpecies = 'rabbit';
+export type AnimalSpecies = 'rabbit' | 'bee';
 
-export type RabbitState = 'wander' | 'seekFood' | 'eat' | 'sleep';
+export type AnimalBrainState =
+  | 'wander'
+  | 'seekFood'
+  | 'eat'
+  | 'sleep'
+  | 'seekFlower'
+  | 'pollinate';
 
 export interface PlantState {
   id: string;
@@ -31,7 +37,7 @@ export interface AnimalState {
   health: number;
   /** 0..1, 1 = full */
   hunger: number;
-  state: RabbitState;
+  state: AnimalBrainState;
   stateTimer: number;
   targetPlantId: string | null;
   hopPhase: number;
@@ -84,7 +90,7 @@ export interface LogEntry {
   text: string;
 };
 
-export type ToolMode = 'inspect' | 'plant-tree' | 'plant-grass' | 'spawn-rabbit' | 'rain';
+export type ToolMode = 'inspect' | 'plant-tree' | 'plant-grass' | 'plant-flower' | 'spawn-rabbit' | 'rain';
 
 export interface GameWorldState {
   planet: PlanetState;

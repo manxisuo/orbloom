@@ -6,6 +6,10 @@ export interface GrowthDeps {
   light: number;
   soilWater: number;
   dtDays: number;
+  /** 0..1 canopy shade from nearby trees */
+  shade?: number;
+  /** Bee pollination boost this tick */
+  pollination?: number;
 }
 
 /**
@@ -14,6 +18,8 @@ export interface GrowthDeps {
  */
 export function updatePlant(plant: PlantState, deps: GrowthDeps): void {
   const { light, soilWater, dtDays } = deps;
+  const shade = deps.shade ?? 0;
+  const pollination = deps.pollination ?? 0;
   const band = lightBand(light);
   const water = plantWaterFactor(plant, soilWater);
   plant.water = water;
@@ -22,24 +28,33 @@ export function updatePlant(plant: PlantState, deps: GrowthDeps): void {
 
   const idealWater = plant.species === 'tree' ? 0.35 : 0.25;
   const waterStress = Math.abs(water - idealWater);
+  // Shade softens drought stress under strong sun
+  const droughtMul = 1 - shade * 0.55;
+  // Effective light for growth is reduced by canopy (grass under trees grows slower)
+  const effLight = light * (plant.species === 'tree' ? 1 : 1 - shade * 0.35);
 
   if (band === 'day') {
-    const growthPush = light * (0.35 + water * 0.65) - waterStress * 0.4;
+    const growthPush = effLight * (0.35 + water * 0.65) - waterStress * 0.4 * droughtMul;
     plant.growth = Math.min(1, Math.max(0, plant.growth + growthPush * dtDays * 0.55));
-    plant.health = Math.min(1, plant.health + (water > 0.2 ? 0.08 : -0.12) * dtDays);
+    plant.health = Math.min(1, plant.health + (water > 0.2 ? 0.08 : -0.12 * droughtMul) * dtDays);
   } else if (band === 'dusk') {
     plant.growth = Math.min(1, plant.growth + 0.04 * water * dtDays);
     plant.health = Math.min(1, plant.health + 0.02 * dtDays);
   } else {
-    // Night: mostly rest; prolonged darkness + dryness damages slowly
     plant.growth = Math.max(0, plant.growth - 0.01 * (1 - water) * dtDays);
     plant.health = Math.min(1, plant.health - 0.02 * (1 - water) * dtDays);
   }
 
-  // Drought if very dry during strong sun
   if (light > 0.55 && water < 0.12) {
-    plant.health = Math.max(0, plant.health - 0.25 * dtDays);
-    plant.growth = Math.max(0, plant.growth - 0.08 * dtDays);
+    plant.health = Math.max(0, plant.health - 0.25 * droughtMul * dtDays);
+    plant.growth = Math.max(0, plant.growth - 0.08 * droughtMul * dtDays);
+  }
+
+  // Bees help flowers and nearby plants thrive
+  if (pollination > 0) {
+    const boost = pollination * dtDays * (plant.species === 'flower' ? 0.55 : 0.18);
+    plant.growth = Math.min(1, plant.growth + boost);
+    plant.health = Math.min(1, plant.health + pollination * dtDays * 0.12);
   }
 
   plant.health = Math.min(1, Math.max(0, plant.health));

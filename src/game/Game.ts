@@ -215,13 +215,13 @@ export class Game {
     }
 
     // Planting uses surface raycast so clicking existing grass doesn't swallow the action
-    if (this.tool === 'plant-tree' || this.tool === 'plant-grass') {
+    if (this.tool === 'plant-tree' || this.tool === 'plant-grass' || this.tool === 'plant-flower') {
       const surface = this.renderer.pickSurface();
       if (!surface) {
         this.notify('请点击星球表面');
         return;
       }
-      const species = this.tool === 'plant-tree' ? 'tree' : 'grass';
+      const species = this.tool === 'plant-tree' ? 'tree' : this.tool === 'plant-flower' ? 'flower' : 'grass';
       const result = plantTreeAt(this.world, surface.localNormal, species);
       if (!result.ok) {
         this.notify(this.plantFailText(result.reason, species));
@@ -252,9 +252,11 @@ export class Game {
     }
   }
 
-  private plantFailText(reason: string, species: 'tree' | 'grass'): string {
+  private plantFailText(reason: string, species: 'tree' | 'grass' | 'flower'): string {
     if (reason === 'stardust') {
-      return species === 'tree' ? '星尘不足（种树需 5）' : '星尘不足（种草需 2）';
+      if (species === 'tree') return '星尘不足（种树需 5）';
+      if (species === 'flower') return '星尘不足（种花需 3）';
+      return '星尘不足（种草需 2）';
     }
     if (reason === 'cap') return '星球上植物太多了';
     if (reason === 'dense') return '这里太挤了，换一块空地';

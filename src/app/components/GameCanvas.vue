@@ -22,6 +22,7 @@ const lastSavedLabel = ref('');
 const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
   { id: 'plant-tree', label: '种树', hint: '点击球面种下一棵树', cost: 5 },
   { id: 'plant-grass', label: '种草', hint: '为兔子提供食物', cost: 2 },
+  { id: 'plant-flower', label: '种花', hint: '吸引蜜蜂授粉', cost: 3 },
   { id: 'spawn-rabbit', label: '引兔', hint: '让一只兔子来到这里', cost: 8 },
   { id: 'rain', label: '降雨', hint: '滋润湖泊（点星球任意处）', cost: 6 },
   { id: 'inspect', label: '观察', hint: '只查看，不建造' },
@@ -65,7 +66,8 @@ onMounted(async () => {
       hoverWater = hover.plant.water;
       hoverLight = 0.5;
     } else if (hover.kind === 'animal') {
-      hoverLabel = `兔子 · ${stateName(hover.animal.state)}`;
+      const name = hover.animal.species === 'bee' ? '蜜蜂' : '兔子';
+      hoverLabel = `${name} · ${stateName(hover.animal.state)}`;
       hoverWater = hover.animal.hunger;
     }
 
@@ -110,6 +112,8 @@ function stateName(s: string) {
     seekFood: '觅食',
     eat: '进食',
     sleep: '睡眠',
+    seekFlower: '寻花',
+    pollinate: '授粉',
   };
   return map[s] ?? s;
 }

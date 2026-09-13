@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { AnimalState, GameWorldState, PlantState } from '../shared/types';
 import { lightAmount, SUN_DIRECTION } from '../simulation/climate/light';
 import { waterAt } from '../simulation/ecology/water';
@@ -48,10 +49,13 @@ export class ThreeRenderer {
 
   private grassMesh: THREE.InstancedMesh | null = null;
   private flowerMesh: THREE.InstancedMesh | null = null;
+  private beeMesh: THREE.InstancedMesh | null = null;
   private grassList: PlantState[] = [];
   private flowerList: PlantState[] = [];
+  private beeList: AnimalState[] = [];
   private readonly GRASS_MAX = 512;
   private readonly FLOWER_MAX = 256;
+  private readonly BEE_MAX = 16;
   private tmpMat = new THREE.Matrix4();
   private tmpQuat = new THREE.Quaternion();
   private tmpPos = new THREE.Vector3();
@@ -376,11 +380,17 @@ export class ThreeRenderer {
     for (const v of this.plantViews.values()) targets.push(v.root);
     if (this.grassMesh) targets.push(this.grassMesh);
     if (this.flowerMesh) targets.push(this.flowerMesh);
+    if (this.beeMesh) targets.push(this.beeMesh);
 
     const hitsEntities = this.raycaster.intersectObjects(targets, true);
     if (hitsEntities.length) {
       const hit = hitsEntities[0];
       const obj = hit.object;
+
+      if (this.beeMesh && (obj === this.beeMesh || obj.parent === this.beeMesh)) {
+        const animal = hit.instanceId != null ? this.beeList[hit.instanceId] : undefined;
+        if (animal) return { type: 'animal', animal };
+      }
 
       if (this.grassMesh && (obj === this.grassMesh || obj.parent === this.grassMesh)) {
         const plant = hit.instanceId != null ? this.grassList[hit.instanceId] : undefined;
@@ -522,9 +532,14 @@ export class ThreeRenderer {
     }
     this.syncInstancedPlants(planet.radius);
 
-    // Sync animals
+    // Sync animals — rabbits individual, bees instanced
+    this.beeList = [];
     const seenAnimals = new Set<string>();
     for (const animal of animals) {
+      if (animal.species === 'bee') {
+        this.beeList.push(animal);
+        continue;
+      }
       seenAnimals.add(animal.id);
       let view = this.animalViews.get(animal.id);
       if (!view) {
@@ -541,6 +556,90 @@ export class ThreeRenderer {
         this.animalViews.delete(id);
       }
     }
+    this.syncBees(planet.radius);
+  }
+
+  private ensureBeeMesh(): THREE.InstancedMesh {
+    if (!this.beeMesh) {
+      const parts: THREE.BufferGeometry[] = [];
+      // Fat yellow body
+      const body = new THREE.SphereGeometry(0.022, 7, 6);
+      body.scale(1.15, 0.9, 1.55);
+      paintGeo(body, 0xf5c542);
+      parts.push(body);
+      // Black stripes
+      const s1 = new THREE.TorusGeometry(0.02, 0.006, 4, 8);
+      s1.rotateX(Math.PI / 2);
+      s1.scale(1, 1, 0.7);
+      s1.translate(0, 0, 0.01);
+      paintGeo(s1, 0x222222);
+      parts.push(s1);
+      const s2 = s1.clone();
+      s2.translate(0, 0, -0.018);
+      paintGeo(s2, 0x222222);
+      parts.push(s2);
+      // Head
+      const head = new THREE.SphereGeometry(0.014, 6, 5);
+      head.translate(0, 0, 0.032);
+      paintGeo(head, 0x2a2a2a);
+      parts.push(head);
+      // Wings
+      const wingMat = 0xd8ecff;
+      const wL = new THREE.SphereGeometry(0.018, 5, 4);
+      wL.scale(1.8, 0.15, 1);
+      wL.translate(-0.022, 0.012, -0.005);
+      paintGeo(wL, wingMat);
+      parts.push(wL);
+      const wR = wL.clone();
+      wR.translate(0.044, 0, 0);
+      paintGeo(wR, wingMat);
+      parts.push(wR);
+
+      const geo = mergeGeometries(parts, false);
+      parts.forEach((p) => p.dispose());
+      const mat = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        flatShading: true,
+        roughness: 0.65,
+        transparent: true,
+        opacity: 0.95,
+      });
+      this.beeMesh = new THREE.InstancedMesh(geo!, mat, this.BEE_MAX);
+      this.beeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.beeMesh.frustumCulled = false;
+      this.beeMesh.castShadow = true;
+      this.planetGroup.add(this.beeMesh);
+    }
+    return this.beeMesh;
+  }
+
+  private syncBees(radius: number): void {
+    const mesh = this.ensureBeeMesh();
+    const count = Math.min(this.beeList.length, this.BEE_MAX);
+    const white = this.tmpColor.setHex(0xffffff);
+    for (let i = 0; i < count; i++) {
+      const b = this.beeList[i];
+      const n = new THREE.Vector3(b.position.normal.x, b.position.normal.y, b.position.normal.z);
+      const hop = Math.sin(b.hopPhase) * 0.012 + 0.02;
+      this.tmpPos.copy(n).multiplyScalar(radius + terrainHeightAt(n.x, n.y, n.z) + hop + 0.05);
+      const face = new THREE.Vector3(b.facing.x, b.facing.y, b.facing.z);
+      if (face.lengthSq() > 1e-6) {
+        const forward = face.projectOnPlane(n).normalize();
+        const right = new THREE.Vector3().crossVectors(n, forward).normalize();
+        const m = new THREE.Matrix4().makeBasis(right, n, forward);
+        this.tmpQuat.setFromRotationMatrix(m);
+      } else {
+        this.tmpQuat.setFromUnitVectors(this.up, n);
+      }
+      const bob = 1 + Math.sin(b.hopPhase * 1.7) * 0.08;
+      this.tmpScale.set(bob, bob, bob);
+      this.tmpMat.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
+      mesh.setMatrixAt(i, this.tmpMat);
+      mesh.setColorAt(i, white);
+    }
+    mesh.count = count;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }
 
   private lakeMeshes: THREE.Mesh[] = [];
@@ -599,14 +698,43 @@ export class ThreeRenderer {
       return this.grassMesh;
     }
     if (!this.flowerMesh) {
-      const geo = new THREE.ConeGeometry(0.028, 0.055, 5);
-      geo.translate(0, 0.027, 0);
+      // Stem (green) + petals (pink-white) + yellow center, baked as vertex colors
+      const parts: THREE.BufferGeometry[] = [];
+      const stem = new THREE.CylinderGeometry(0.007, 0.01, 0.07, 5);
+      stem.translate(0, 0.035, 0);
+      paintGeo(stem, 0x3d8f4a);
+      parts.push(stem);
+
+      const leaf = new THREE.SphereGeometry(0.016, 5, 4);
+      leaf.scale(1.6, 0.35, 0.7);
+      leaf.rotateZ(0.6);
+      leaf.translate(0.018, 0.04, 0);
+      paintGeo(leaf, 0x4caf60);
+      parts.push(leaf);
+
+      for (let i = 0; i < 6; i++) {
+        const petal = new THREE.SphereGeometry(0.022, 6, 4);
+        petal.scale(1.5, 0.28, 0.85);
+        const a = (i / 6) * Math.PI * 2;
+        petal.rotateY(a);
+        petal.translate(Math.cos(a) * 0.022, 0.085, Math.sin(a) * 0.022);
+        paintGeo(petal, 0xf7a8c8);
+        parts.push(petal);
+      }
+
+      const center = new THREE.SphereGeometry(0.016, 6, 5);
+      center.translate(0, 0.09, 0);
+      paintGeo(center, 0xf0d060);
+      parts.push(center);
+
+      const geo = mergeGeometries(parts, false);
+      parts.forEach((p) => p.dispose());
       const mat = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
+        vertexColors: true,
         flatShading: true,
-        roughness: 0.9,
+        roughness: 0.85,
       });
-      this.flowerMesh = new THREE.InstancedMesh(geo, mat, this.FLOWER_MAX);
+      this.flowerMesh = new THREE.InstancedMesh(geo!, mat, this.FLOWER_MAX);
       this.flowerMesh.castShadow = true;
       this.flowerMesh.receiveShadow = true;
       this.flowerMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -631,8 +759,9 @@ export class ThreeRenderer {
     const mesh = this.ensureInstanced(kind);
     const max = kind === 'grass' ? this.GRASS_MAX : this.FLOWER_MAX;
     const count = Math.min(list.length, max);
-    const healthy = this.tmpColor.setHex(healthyHex);
-    const sick = new THREE.Color(sickHex);
+    // Flowers keep baked vertex colors; only slight health desaturation via instanceColor
+    const healthy = this.tmpColor.setHex(kind === 'flower' ? 0xffffff : healthyHex);
+    const sick = new THREE.Color(kind === 'flower' ? 0xc8c090 : sickHex);
 
     for (let i = 0; i < count; i++) {
       const p = list[i];
@@ -643,8 +772,7 @@ export class ThreeRenderer {
       const alt = Math.max(p.position.altitude, ground) + 0.004;
       this.tmpPos.set(nx, ny, nz).multiplyScalar(radius + alt);
       this.tmpQuat.setFromUnitVectors(this.up, this.tmpPos.clone().normalize());
-      // New plants start tiny; keep a visible floor so they aren't invisible
-      const s = Math.max(0.55, (0.55 + p.growth * 0.9) * (0.8 + p.health * 0.2));
+      const s = Math.max(kind === 'flower' ? 0.7 : 0.55, (0.55 + p.growth * 0.9) * (0.8 + p.health * 0.2));
       this.tmpScale.setScalar(s);
       this.tmpMat.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
       mesh.setMatrixAt(i, this.tmpMat);
@@ -797,6 +925,11 @@ export class ThreeRenderer {
       disposeObject(this.flowerMesh);
       this.flowerMesh = null;
     }
+    if (this.beeMesh) {
+      this.planetGroup.remove(this.beeMesh);
+      disposeObject(this.beeMesh);
+      this.beeMesh = null;
+    }
     this.renderer.dispose();
   }
 }
@@ -809,4 +942,17 @@ function disposeObject(root: THREE.Object3D): void {
     if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
     else if (mat) mat.dispose();
   });
+}
+
+/** Bake a flat vertex-color attribute onto a geometry. */
+function paintGeo(geo: THREE.BufferGeometry, hex: number): void {
+  const count = geo.attributes.position.count;
+  const c = new THREE.Color(hex);
+  const arr = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    arr[i * 3] = c.r;
+    arr[i * 3 + 1] = c.g;
+    arr[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
 }

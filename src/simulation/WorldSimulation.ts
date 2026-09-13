@@ -22,6 +22,8 @@ import { SUN_DIRECTION, lightAmount } from './climate/light';
 import { evaporateLakes, rainLakes, waterAt } from './ecology/water';
 import { updatePlant } from './ecology/growth';
 import { RABBIT_DECISION_INTERVAL, updateRabbit } from './behaviors/rabbit';
+import { updateBee } from './behaviors/bee';
+import { treeShadeAt } from './ecology/shade';
 import { terrainHeightAt } from '../shared/terrain';
 
 const tmpWorld = v3();
@@ -41,10 +43,14 @@ export function createWorld(seed = 42): GameWorldState {
     const n = randomNear(rng, lakes[0].normal, 0.55);
     plants.push(makePlant('grass', n, 0.4 + rng() * 0.4));
   }
-  // A couple of young trees
+  // A couple of young trees + a few flowers so bees have a reason to appear
   for (let i = 0; i < 3; i++) {
     const n = randomNear(rng, lakes[0].normal, 0.7);
     plants.push(makePlant('tree', n, 0.25 + rng() * 0.2));
+  }
+  for (let i = 0; i < 4; i++) {
+    const n = randomNear(rng, lakes[0].normal, 0.5);
+    plants.push(makePlant('flower', n, 0.3 + rng() * 0.3));
   }
 
   const animals: AnimalState[] = [];
@@ -108,14 +114,34 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     budget.plantTick = 0;
     const dtPlantDays = step / world.time.dayLength;
 
+    // Pollination pulse from bees near flowers (rebuilt cheaply each plant tick)
+    const pollination = new Map<string, number>();
+    for (const a of animals) {
+      if (a.species !== 'bee' || a.state !== 'pollinate' || !a.targetPlantId) continue;
+      const cur = pollination.get(a.targetPlantId) ?? 0;
+      pollination.set(a.targetPlantId, cur + 1);
+      // Nearby plants also get a mild boost
+      for (const p of plants) {
+        if (p.id === a.targetPlantId) continue;
+        if (ang(p.position.normal, a.position.normal) > 0.35) continue;
+        const n = pollination.get(p.id) ?? 0;
+        pollination.set(p.id, n + 0.25);
+      }
+    }
+
     for (const plant of plants) {
       localToWorldNormal(tmpWorld, plant.position.normal, planet.rotationX, planet.rotationY);
       const light = lightAmount(tmpWorld, SUN_DIRECTION);
       const soil = waterAt(plant.position.normal, planet.lakes);
-      updatePlant(plant, { light, soilWater: soil, dtDays: dtPlantDays });
+      const shade = treeShadeAt(plants, plant.position.normal);
+      updatePlant(plant, {
+        light,
+        soilWater: soil,
+        dtDays: dtPlantDays,
+        shade,
+        pollination: pollination.get(plant.id) ?? 0,
+      });
     }
-
-    // Remove dead grass occasionally handled by cull below
   }
 
   // Animals: decision at ~3Hz, movement every tick for smoothness
@@ -125,13 +151,17 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     doDecision = true;
   }
 
-  for (const rabbit of animals) {
-    localToWorldNormal(tmpWorld, rabbit.position.normal, planet.rotationX, planet.rotationY);
+  for (const animal of animals) {
+    localToWorldNormal(tmpWorld, animal.position.normal, planet.rotationX, planet.rotationY);
     const light = lightAmount(tmpWorld, SUN_DIRECTION);
-    updateRabbit(rabbit, plants, light, dt, doDecision ? 0 : 1);
+    if (animal.species === 'bee') {
+      updateBee(animal, plants, light, dt, doDecision);
+    } else {
+      updateRabbit(animal, plants, light, dt, doDecision ? 0 : 1);
+    }
   }
 
-  // Lakes evaporate based on sun
+  // Lakes evaporate based on sun + tree shade
   if (budget.ecoTick >= 1.0) {
     const step = budget.ecoTick;
     budget.ecoTick = 0;
@@ -143,14 +173,18 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
         return lightAmount(tmpWorld, SUN_DIRECTION);
       },
       dtLakeDays,
+      plants,
     );
+
+    // Bees appear when enough mature flowers exist
+    maybeSpawnBees(world);
 
     // Natural stardust trickle from healthy eco
     const s = computeStats(plants, animals, planet.lakes, world.time.gameTime);
     world.stats = s;
     world.resources.stardust += s.stability * dtLakeDays * 18;
 
-    // Cull withered grass
+    // Cull withered grass/flowers
     for (let i = plants.length - 1; i >= 0; i--) {
       const p = plants[i];
       if (p.species !== 'tree' && p.health <= 0.02 && p.growth <= 0.02) {
@@ -158,6 +192,41 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
       }
     }
   }
+}
+
+function maybeSpawnBees(world: GameWorldState): void {
+  const bees = world.animals.filter((a) => a.species === 'bee');
+  if (bees.length >= 6) return;
+  const flowers = world.plants.filter((p) => p.species === 'flower' && p.growth >= 0.4 && p.health >= 0.4);
+  if (flowers.length < 2) return;
+  // Roughly one bee per 3 mature flowers, spawn slowly
+  const want = Math.min(6, Math.floor(flowers.length / 3) + 1);
+  if (bees.length >= want) return;
+  if (Math.random() > 0.35) return;
+
+  const flower = flowers[Math.floor(Math.random() * flowers.length)];
+  const bee = makeBee(mulberry32(Math.floor(world.time.gameTime * 100) + bees.length));
+  copyV3(bee.position.normal, flower.position.normal);
+  world.animals.push(bee);
+  if (bees.length === 0) pushLog(world, '蜜蜂被花海吸引来了。');
+}
+
+function makeBee(rng: () => number): AnimalState {
+  const normal = randomOnSphere(v3(), rng);
+  const facing = v3();
+  randomTangentSafe(facing, normal);
+  return {
+    id: nextId('animal'),
+    species: 'bee',
+    position: { normal, altitude: 0.05 },
+    facing,
+    health: 1,
+    hunger: 0.5,
+    state: 'wander',
+    stateTimer: 0,
+    targetPlantId: null,
+    hopPhase: rng() * Math.PI * 2,
+  };
 }
 
 export function refreshStats(world: GameWorldState): void {
