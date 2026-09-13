@@ -463,6 +463,12 @@ export class ThreeRenderer {
     });
   }
 
+  private updatePointerFromClient(clientX: number, clientY: number): void {
+    const rect = this.canvas.getBoundingClientRect();
+    this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
   private bindInput(): void {
     const el = this.canvas;
     el.style.touchAction = 'none';
@@ -473,6 +479,7 @@ export class ThreeRenderer {
     el.addEventListener('pointerdown', (e) => {
       el.setPointerCapture(e.pointerId);
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.updatePointerFromClient(e.clientX, e.clientY);
       if (activePointers.size === 1) {
         this.dragging = true;
         this.dragMoved = false;
@@ -487,9 +494,7 @@ export class ThreeRenderer {
     });
 
     el.addEventListener('pointermove', (e) => {
-      const rect = el.getBoundingClientRect();
-      this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      this.updatePointerFromClient(e.clientX, e.clientY);
 
       if (activePointers.has(e.pointerId)) {
         activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -525,6 +530,8 @@ export class ThreeRenderer {
     const end = (e: PointerEvent) => {
       activePointers.delete(e.pointerId);
       if (activePointers.size < 2) pinchDist = 0;
+      // Touch taps may never fire pointermove — pick must use the lift position
+      this.updatePointerFromClient(e.clientX, e.clientY);
       if (this.dragging && !this.dragMoved) {
         this.cbs.onClick(this.pick());
       }
