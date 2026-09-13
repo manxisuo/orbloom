@@ -76,13 +76,14 @@ export function updateRabbit(
 }
 
 function decide(rabbit: AnimalState, plants: PlantState[], band: 'day' | 'dusk' | 'night'): void {
-  if (band === 'night' && rabbit.hunger < 0.85) {
+  // Starving rabbits wake even at night
+  if (band === 'night' && rabbit.hunger < 0.75) {
     rabbit.state = 'sleep';
     rabbit.targetPlantId = null;
     return;
   }
 
-  if (rabbit.state === 'sleep' && band !== 'night') {
+  if (rabbit.state === 'sleep' && (band !== 'night' || rabbit.hunger >= 0.75)) {
     rabbit.state = 'wander';
   }
 
@@ -130,6 +131,13 @@ function moveToward(rabbit: AnimalState, target: Vec3Like, dt: number, speed: nu
 
 function moveAlongFacing(rabbit: AnimalState, dt: number, speed: number): void {
   const n = rabbit.position.normal;
+  if (!Number.isFinite(n.x) || !Number.isFinite(n.y) || !Number.isFinite(n.z) || Math.hypot(n.x, n.y, n.z) < 1e-6) {
+    randomTangent(rabbit.facing, v3(0, 1, 0));
+    normalize(n, v3(0.3, 0.7, 0.2));
+  }
+  if (!Number.isFinite(rabbit.facing.x) || !Number.isFinite(rabbit.facing.y) || !Number.isFinite(rabbit.facing.z)) {
+    randomTangent(rabbit.facing, n);
+  }
   const dir = projectOnPlane(tmpB, rabbit.facing, n);
   if (Math.hypot(dir.x, dir.y, dir.z) < 1e-5) {
     randomTangent(rabbit.facing, n);

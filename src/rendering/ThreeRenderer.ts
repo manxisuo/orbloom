@@ -865,7 +865,11 @@ export class ThreeRenderer {
   private updateAnimalView(view: AnimalView, radius: number): void {
     const a = view.animal;
     const n = new THREE.Vector3(a.position.normal.x, a.position.normal.y, a.position.normal.z);
-    const hop = Math.max(0, Math.sin(a.hopPhase)) * 0.012 * (a.state === 'sleep' ? 0 : 1);
+    const sleeping = a.state === 'sleep';
+    // Sleep: slow breathing; awake: hop
+    const hop = sleeping
+      ? Math.sin(a.hopPhase * 0.35) * 0.004
+      : Math.max(0, Math.sin(a.hopPhase)) * 0.012;
     view.root.position.copy(n).multiplyScalar(radius + terrainHeightAt(n.x, n.y, n.z) + 0.02 + hop);
     view.root.quaternion.setFromUnitVectors(this.up, n);
 
@@ -881,7 +885,7 @@ export class ThreeRenderer {
       }
     }
 
-    const scale = a.state === 'sleep' ? 0.92 : 1;
+    const scale = sleeping ? 0.92 + Math.sin(a.hopPhase * 0.35) * 0.02 : 1;
     view.root.scale.setScalar(scale);
   }
 

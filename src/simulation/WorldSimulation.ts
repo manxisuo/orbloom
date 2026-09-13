@@ -105,6 +105,8 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
   }
   const dt = dtReal * speed;
   world.time.gameTime += dt;
+  // Slow ambient spin: without this, night-side animals sleep forever if the player stops dragging
+  world.planet.rotationY += dt * 0.014;
 
   budget.animalDecision += dt;
   budget.plantTick += dt;
@@ -194,6 +196,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
 
     // Bees appear when enough mature flowers exist
     maybeSpawnBees(world);
+    maybeRabbitLife(world, dtLakeDays);
 
     // Event cards
     if (!world.pendingEvent) {
@@ -268,7 +271,94 @@ function makeBee(rng: () => number): AnimalState {
     stateTimer: 0,
     targetPlantId: null,
     hopPhase: rng() * Math.PI * 2,
+    age: 0,
+    breedCooldown: 999,
   };
+}
+
+function makeRabbit(rng: () => number, age = 0.8 + rng() * 1.2): AnimalState {
+  const normal = randomOnSphere(v3(), rng);
+  const facing = v3();
+  randomTangentSafe(facing, normal);
+  return {
+    id: nextId('animal'),
+    species: 'rabbit',
+    position: { normal, altitude: 0 },
+    facing,
+    health: 1,
+    hunger: 0.4,
+    state: 'wander',
+    stateTimer: 0,
+    targetPlantId: null,
+    hopPhase: rng() * Math.PI * 2,
+    age,
+    breedCooldown: rng() * 2,
+  };
+}
+
+/** Rabbits breed when well-fed adults meet; elders pass on. */
+function maybeRabbitLife(world: GameWorldState, dtDays: number): void {
+  const MAX_RABBITS = 24;
+  const rabbits = world.animals.filter((a) => a.species === 'rabbit');
+
+  for (const r of rabbits) {
+    r.age += dtDays;
+    r.breedCooldown = Math.max(0, r.breedCooldown - dtDays);
+    // Old age
+    if (r.age > 12 && Math.random() < dtDays * 0.35) {
+      r.health = Math.max(0, r.health - dtDays * 2);
+    }
+  }
+
+  // Remove dead
+  for (let i = world.animals.length - 1; i >= 0; i--) {
+    const a = world.animals[i];
+    if (a.species === 'rabbit' && a.health <= 0.02) {
+      world.animals.splice(i, 1);
+      if (a.age > 8) pushLog(world, '一只上了年纪的兔子安静地离开了。');
+    }
+  }
+
+  const alive = world.animals.filter((a) => a.species === 'rabbit');
+  if (alive.length < 2 || alive.length >= MAX_RABBITS) return;
+
+  for (let i = 0; i < alive.length; i++) {
+    const a = alive[i];
+    if (a.age < 2 || a.breedCooldown > 0 || a.hunger > 0.55 || a.health < 0.55) continue;
+    for (let j = i + 1; j < alive.length; j++) {
+      const b = alive[j];
+      if (b.age < 2 || b.breedCooldown > 0 || b.hunger > 0.55 || b.health < 0.55) continue;
+      if (ang(a.position.normal, b.position.normal) > 0.2) continue;
+      // Litter
+      const kits = 1 + (Math.random() < 0.35 ? 1 : 0);
+      const mid = mixNormals(a.position.normal, b.position.normal);
+      for (let k = 0; k < kits && world.animals.filter((x) => x.species === 'rabbit').length < MAX_RABBITS; k++) {
+        const baby = makeRabbit(mulberry32(Math.floor(world.time.gameTime * 997) + k + i), 0);
+        baby.hunger = 0.3;
+        baby.breedCooldown = 3;
+        jitterNormal(baby.position.normal, mid, 0.08);
+        world.animals.push(baby);
+      }
+      a.breedCooldown = 4;
+      b.breedCooldown = 4;
+      a.hunger = Math.min(1, a.hunger + 0.25);
+      b.hunger = Math.min(1, b.hunger + 0.25);
+      pushLog(world, kits > 1 ? '一对兔子迎来了两只小生命。' : '一对兔子迎来了一个小生命。');
+      return;
+    }
+  }
+}
+
+function mixNormals(a: Vec3Like, b: Vec3Like): Vec3Like {
+  return normalize(v3(), v3(a.x + b.x, a.y + b.y, a.z + b.z));
+}
+
+function jitterNormal(out: Vec3Like, base: Vec3Like, amt: number): void {
+  const j = randomOnSphere(v3(), mulberry32(Math.floor(Math.random() * 1e9)));
+  out.x = base.x + j.x * amt;
+  out.y = base.y + j.y * amt;
+  out.z = base.z + j.z * amt;
+  normalize(out, out);
 }
 
 export function refreshStats(world: GameWorldState): void {
@@ -352,24 +442,6 @@ function makePlant(species: PlantSpecies, normal: Vec3Like, growth: number): Pla
     health: 1,
     water: 0.4,
     growth,
-  };
-}
-
-function makeRabbit(rng: () => number): AnimalState {
-  const normal = randomOnSphere(v3(), rng);
-  const facing = v3();
-  randomTangentSafe(facing, normal);
-  return {
-    id: nextId('animal'),
-    species: 'rabbit',
-    position: { normal, altitude: 0 },
-    facing,
-    health: 1,
-    hunger: 0.4,
-    state: 'wander',
-    stateTimer: 0,
-    targetPlantId: null,
-    hopPhase: rng() * Math.PI * 2,
   };
 }
 

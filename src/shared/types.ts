@@ -41,6 +41,10 @@ export interface AnimalState {
   stateTimer: number;
   targetPlantId: string | null;
   hopPhase: number;
+  /** Game-days lived */
+  age: number;
+  /** Game-days until this animal can breed again */
+  breedCooldown: number;
 };
 
 export interface LakeCenter {
