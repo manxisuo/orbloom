@@ -15,8 +15,10 @@ type Fx = {
 export class EventVfx {
   private group = new THREE.Group();
   private active: Fx[] = [];
+  private parent: THREE.Object3D;
 
-  constructor(private parent: THREE.Object3D) {
+  constructor(parent: THREE.Object3D) {
+    this.parent = parent;
     parent.add(this.group);
   }
 

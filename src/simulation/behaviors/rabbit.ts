@@ -48,7 +48,7 @@ export function updateRabbit(
   }
 
   if (decisionClock <= 0 && rabbit.state !== 'eat') {
-    decide(rabbit, plants, band);
+    decide(rabbit, plants);
   }
 
   const nightMul = band === 'night' ? 0.25 : band === 'dusk' ? 0.7 : 1;
@@ -89,7 +89,7 @@ export function updateRabbit(
   }
 }
 
-function decide(rabbit: AnimalState, plants: PlantState[], band: 'day' | 'dusk' | 'night'): void {
+function decide(rabbit: AnimalState, plants: PlantState[]): void {
   if (rabbit.state === 'eat') return;
 
   if (rabbit.hunger > 0.4) {
