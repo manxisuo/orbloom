@@ -520,6 +520,8 @@ export class ThreeRenderer {
         view = this.createPlantView(plant);
         this.plantViews.set(plant.id, view);
         this.planetGroup.add(view.root);
+      } else {
+        view.plant = plant;
       }
       this.updatePlantView(view, planet.radius);
     }
@@ -546,6 +548,9 @@ export class ThreeRenderer {
         view = this.createAnimalView(animal);
         this.animalViews.set(animal.id, view);
         this.planetGroup.add(view.root);
+      } else {
+        // Rebind after load/applyWorld — ids match but object identity may not
+        view.animal = animal;
       }
       this.updateAnimalView(view, planet.radius);
     }
@@ -866,10 +871,9 @@ export class ThreeRenderer {
     const a = view.animal;
     const n = new THREE.Vector3(a.position.normal.x, a.position.normal.y, a.position.normal.z);
     const sleeping = a.state === 'sleep';
-    // Sleep: slow breathing; awake: hop
-    const hop = sleeping
-      ? Math.sin(a.hopPhase * 0.35) * 0.004
-      : Math.max(0, Math.sin(a.hopPhase)) * 0.012;
+    const hop =
+      Math.max(0, Math.sin(a.hopPhase)) * 0.012 * (sleeping ? 0.35 : 1) +
+      (sleeping ? 0 : 0.004);
     view.root.position.copy(n).multiplyScalar(radius + terrainHeightAt(n.x, n.y, n.z) + 0.02 + hop);
     view.root.quaternion.setFromUnitVectors(this.up, n);
 
@@ -885,7 +889,7 @@ export class ThreeRenderer {
       }
     }
 
-    const scale = sleeping ? 0.92 + Math.sin(a.hopPhase * 0.35) * 0.02 : 1;
+    const scale = 1;
     view.root.scale.setScalar(scale);
   }
 

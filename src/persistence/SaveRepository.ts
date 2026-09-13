@@ -87,6 +87,30 @@ export class SaveRepository {
     ];
     resetIdCounter(Math.max(1, save.entityIdCounter || 1));
     syncIdCounterFromIds(ids);
+
+    for (const a of world.animals) {
+      const n = a.position?.normal;
+      if (!n || !Number.isFinite(n.x) || !Number.isFinite(n.y) || !Number.isFinite(n.z)) {
+        a.position = { normal: { x: 0.2, y: 0.5, z: 0.84 }, altitude: 0 };
+      } else {
+        const len = Math.hypot(n.x, n.y, n.z) || 1;
+        n.x /= len;
+        n.y /= len;
+        n.z /= len;
+      }
+      const f = a.facing;
+      if (!f || !Number.isFinite(f.x) || !Number.isFinite(f.y) || !Number.isFinite(f.z)) {
+        a.facing = { x: 1, y: 0, z: 0 };
+      }
+      const okStates = new Set(['wander', 'seekFood', 'eat', 'sleep', 'seekFlower', 'pollinate']);
+      if (!okStates.has(a.state)) a.state = 'wander';
+      if (!Number.isFinite(a.hunger)) a.hunger = 0.4;
+      if (!Number.isFinite(a.health)) a.health = 1;
+      if (!Number.isFinite(a.hopPhase)) a.hopPhase = 0;
+      if (!Number.isFinite(a.age)) a.age = 1;
+      if (!Number.isFinite(a.breedCooldown)) a.breedCooldown = 0;
+    }
+
     return { meta: save.meta, world };
   }
 }

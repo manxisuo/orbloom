@@ -17,8 +17,9 @@ export function lightAmount(worldNormal: Vec3Like, sunDir: Vec3Like = SUN_DIRECT
 }
 
 export function lightBand(amount: number): LightBand {
-  if (amount > 0.25) return 'day';
-  if (amount > 0.02) return 'dusk';
+  // Wider dusk so the terminator is clearly "not night" and animals wake
+  if (amount > 0.18) return 'day';
+  if (amount > 0.04) return 'dusk';
   return 'night';
 }
 

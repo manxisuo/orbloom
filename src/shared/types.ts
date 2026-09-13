@@ -56,9 +56,12 @@ export interface LakeCenter {
 
 export interface PlanetState {
   radius: number;
-  /** Radians around Y; player drag adjusts this. */
+  /** Radians around Y; integrated from spin velocity. */
   rotationY: number;
   rotationX: number;
+  /** Angular velocity (rad/s) — drag sets this, damping coasts it down. */
+  spinVelY: number;
+  spinVelX: number;
   lakes: LakeCenter[];
 };
 

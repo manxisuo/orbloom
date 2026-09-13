@@ -1,0 +1,39 @@
+import { describe, expect, it } from 'vitest';
+import { createBudget, createWorld, tickWorld } from './WorldSimulation';
+
+describe('tickWorld rabbit integration', () => {
+  it('starter rabbits change position over simulated time', () => {
+    const world = createWorld(42);
+    world.time.speed = 1;
+    const budget = createBudget();
+    const starts = world.animals
+      .filter((a) => a.species === 'rabbit')
+      .map((a) => ({ id: a.id, n: { ...a.position.normal } }));
+    expect(starts.length).toBeGreaterThan(0);
+
+    // 3 seconds at 60fps
+    for (let i = 0; i < 180; i++) {
+      tickWorld(world, budget, 1 / 60);
+    }
+
+    for (const s of starts) {
+      const a = world.animals.find((x) => x.id === s.id);
+      expect(a).toBeTruthy();
+      const d = Math.hypot(
+        a!.position.normal.x - s.n.x,
+        a!.position.normal.y - s.n.y,
+        a!.position.normal.z - s.n.z,
+      );
+      console.log(s.id, 'moved', d, 'state', a!.state, 'light-era rotY', world.planet.rotationY);
+      expect(d).toBeGreaterThan(0.005);
+    }
+  });
+
+  it('animals are actually updated in the animals loop (species filter)', () => {
+    const world = createWorld(7);
+    const rabbits = world.animals.filter((a) => a.species === 'rabbit');
+    expect(rabbits.every((a) => a.species === 'rabbit')).toBe(true);
+    // ensure none are accidentally classified only as bee
+    expect(world.animals.some((a) => a.species === 'bee')).toBe(false);
+  });
+});

@@ -64,6 +64,8 @@ export function createWorld(seed = 42): GameWorldState {
       radius: 1,
       rotationY: 0.4,
       rotationX: 0.15,
+      spinVelY: 0,
+      spinVelX: 0,
       lakes,
     },
     plants,
@@ -97,22 +99,36 @@ export function createBudget(): SimBudget {
   return { animalDecision: 0, plantTick: 0, ecoTick: 0 };
 }
 
+export const SPIN_MAX_Y = 0.95;
+export const SPIN_MAX_X = 0.45;
+const SPIN_DAMP_Y = 1.6;
+const SPIN_DAMP_X = 2.0;
+
 export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: number): void {
   const speed = world.time.speed;
   if (speed <= 0) {
-    // Still allow UI clocks to idle
     return;
   }
   const dt = dtReal * speed;
   world.time.gameTime += dt;
-  // Slow ambient spin: without this, night-side animals sleep forever if the player stops dragging
-  world.planet.rotationY += dt * 0.014;
+
+  // Integrate spin with damping — drag sets velocity, release coasts
+  const planet = world.planet;
+  planet.spinVelY = Math.max(-SPIN_MAX_Y, Math.min(SPIN_MAX_Y, planet.spinVelY || 0));
+  planet.spinVelX = Math.max(-SPIN_MAX_X, Math.min(SPIN_MAX_X, planet.spinVelX || 0));
+  planet.rotationY += planet.spinVelY * dt;
+  planet.rotationX += planet.spinVelX * dt;
+  planet.rotationX = Math.max(-0.9, Math.min(0.9, planet.rotationX));
+  planet.spinVelY *= Math.exp(-SPIN_DAMP_Y * dt);
+  planet.spinVelX *= Math.exp(-SPIN_DAMP_X * dt);
+  if (Math.abs(planet.spinVelY) < 0.002) planet.spinVelY = 0;
+  if (Math.abs(planet.spinVelX) < 0.002) planet.spinVelX = 0;
 
   budget.animalDecision += dt;
   budget.plantTick += dt;
   budget.ecoTick += dt;
 
-  const { planet, plants, animals } = world;
+  const { plants, animals } = world;
 
   // Plants: ~2 Hz logic is enough; accumulate then step with scaled dt
   if (budget.plantTick >= 0.5) {

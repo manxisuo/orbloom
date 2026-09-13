@@ -11,8 +11,8 @@ import {
 import { lightBand } from '../climate/light';
 import { forageAt } from '../ecology/growth';
 
-const WALK_SPEED = 0.22; // radians of surface per second (game time)
-const DECISION_INTERVAL = 0.35;
+const WALK_SPEED = 0.35;
+const DECISION_INTERVAL = 0.2;
 const tmpA = v3();
 const tmpB = v3();
 const tmpC = v3();
@@ -29,16 +29,26 @@ export function updateRabbit(
 
   const band = lightBand(light);
 
-  // Low-rate behavior decisions
-  if (decisionClock <= 0) {
+  // Never hard-freeze. Night = slow idle; day = normal activity.
+  // (Sleep state kept for UI/compat but does not stop movement.)
+  if (band === 'night' && rabbit.hunger < 0.75) {
+    if (rabbit.state !== 'eat') rabbit.state = 'sleep';
+  } else if (rabbit.state === 'sleep') {
+    rabbit.state = 'wander';
+    rabbit.targetPlantId = null;
+  }
+
+  if (decisionClock <= 0 && rabbit.state !== 'eat') {
     decide(rabbit, plants, band);
   }
 
-  // Always move / act
+  // Movement always runs — including "sleep" (slow shuffle)
+  const nightMul = band === 'night' ? 0.25 : band === 'dusk' ? 0.7 : 1;
+
   switch (rabbit.state) {
+    case 'sleep':
     case 'wander':
-      wanderMove(rabbit, dt);
-      rabbit.hunger = Math.min(1, rabbit.hunger + 0);
+      wanderMove(rabbit, dt * nightMul);
       break;
     case 'seekFood': {
       const target = findPlant(plants, rabbit.targetPlantId);
@@ -46,7 +56,7 @@ export function updateRabbit(
         rabbit.state = 'wander';
         rabbit.targetPlantId = null;
       } else {
-        moveToward(rabbit, target.position.normal, dt, WALK_SPEED * 1.15);
+        moveToward(rabbit, target.position.normal, dt * nightMul, WALK_SPEED * 1.15);
         if (angDist(rabbit.position.normal, target.position.normal) < 0.06) {
           rabbit.state = 'eat';
           rabbit.stateTimer = 1.2;
@@ -57,7 +67,6 @@ export function updateRabbit(
     case 'eat': {
       const target = findPlant(plants, rabbit.targetPlantId);
       if (target && target.growth > 0.05) {
-        // Nibble plant
         const bite = Math.min(target.growth, dt * 0.25);
         target.growth = Math.max(0, target.growth - bite);
         rabbit.hunger = Math.max(0, rabbit.hunger - dt * 0.35);
@@ -69,24 +78,10 @@ export function updateRabbit(
       }
       break;
     }
-    case 'sleep':
-      // Stay still at night
-      break;
   }
 }
 
 function decide(rabbit: AnimalState, plants: PlantState[], band: 'day' | 'dusk' | 'night'): void {
-  // Starving rabbits wake even at night
-  if (band === 'night' && rabbit.hunger < 0.75) {
-    rabbit.state = 'sleep';
-    rabbit.targetPlantId = null;
-    return;
-  }
-
-  if (rabbit.state === 'sleep' && (band !== 'night' || rabbit.hunger >= 0.75)) {
-    rabbit.state = 'wander';
-  }
-
   if (rabbit.state === 'eat') return;
 
   if (rabbit.hunger > 0.4) {
@@ -98,15 +93,15 @@ function decide(rabbit: AnimalState, plants: PlantState[], band: 'day' | 'dusk' 
     }
   }
 
-  if (rabbit.state !== 'wander') {
+  if (rabbit.state !== 'wander' && rabbit.state !== 'sleep') {
     rabbit.state = 'wander';
     rabbit.targetPlantId = null;
   }
 }
 
 function wanderMove(rabbit: AnimalState, dt: number): void {
-  // Occasionally jitter facing
-  if (Math.random() < dt * 0.8) {
+  if (dt <= 0) return;
+  if (Math.random() < dt * 1.2) {
     randomTangent(rabbit.facing, rabbit.position.normal);
   }
   moveAlongFacing(rabbit, dt, WALK_SPEED * 0.55);

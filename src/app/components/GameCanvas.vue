@@ -138,21 +138,14 @@ function setSpeed(v: number) {
   game?.setSpeed(v);
 }
 
-async function continueGame() {
+function continueGame() {
   if (!game) return;
-  try {
-    const loaded = await repo.loadLatest();
-    if (loaded) {
-      game.applyWorld(loaded.world);
-      store.flash(`已读取：${loaded.meta.label}`);
-    }
-  } catch (err) {
-    store.flash(err instanceof Error ? err.message : '读档失败');
-  }
+  // World was already loaded into Game at mount; just unpause and run.
   game.setSpeed(1);
   store.setSpeed(1);
   game.start();
   bootReady.value = false;
+  store.flash('继续值日');
 }
 
 function startNewGame() {
@@ -270,7 +263,7 @@ onBeforeUnmount(() => {
         <span v-if="t.cost" class="tool-cost">{{ t.cost }}</span>
       </button>
       <button class="tool-btn rain-btn" @click="castRain">立即降雨</button>
-      <p class="hint">拖动旋转星球<br />滚轮缩放<br />点击表面执行工具<br />每 45 秒自动存档</p>
+      <p class="hint">拖动甩动星球（带惯性）<br />滚轮缩放<br />点击表面执行工具<br />每 45 秒自动存档</p>
     </aside>
 
     <!-- Right stats -->

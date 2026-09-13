@@ -37,6 +37,7 @@ export function migrateSave(raw: unknown): SaveGame {
 
 function migrateV1ToV2(data: AnyRecord): AnyRecord {
   const world = (data.world ?? {}) as AnyRecord;
+  const planet = (world.planet ?? {}) as AnyRecord;
   return {
     ...data,
     schemaVersion: 2,
@@ -45,6 +46,11 @@ function migrateV1ToV2(data: AnyRecord): AnyRecord {
       modifiers: (world.modifiers as AnyRecord) ?? { droughtDays: 0, coldDays: 0 },
       pendingEvent: (world.pendingEvent as AnyRecord) ?? null,
       nextEventIn: typeof world.nextEventIn === 'number' ? world.nextEventIn : 35,
+      planet: {
+        ...planet,
+        spinVelY: typeof planet.spinVelY === 'number' ? planet.spinVelY : 0,
+        spinVelX: typeof planet.spinVelX === 'number' ? planet.spinVelX : 0,
+      },
     },
   };
 }

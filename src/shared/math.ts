@@ -83,18 +83,22 @@ export function rotateX(out: Vec3Like, a: Vec3Like, angle: number): Vec3Like {
   return setV3(out, a.x, y, z);
 }
 
-/** Apply planet rotation (X then Y) to a local surface normal → world direction. */
+/**
+ * Apply planet rotation to a local surface normal → world direction.
+ * Must match Three.js Euler order 'XYZ' used by planetGroup.rotation.set(x, y, 0):
+ * that composition applies Y first, then X.
+ */
 export function localToWorldNormal(out: Vec3Like, local: Vec3Like, rotX: number, rotY: number): Vec3Like {
   copyV3(out, local);
-  rotateX(out, out, rotX);
   rotateY(out, out, rotY);
+  rotateX(out, out, rotX);
   return normalize(out, out);
 }
 
 export function worldToLocalNormal(out: Vec3Like, world: Vec3Like, rotX: number, rotY: number): Vec3Like {
   copyV3(out, world);
-  rotateY(out, out, -rotY);
   rotateX(out, out, -rotX);
+  rotateY(out, out, -rotY);
   return normalize(out, out);
 }
 

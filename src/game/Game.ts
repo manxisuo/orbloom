@@ -175,10 +175,12 @@ export class Game {
     if (msg) this.notify(msg);
   }
 
+  /** Drag sets angular velocity (capped); planet coasts after release. */
   rotatePlanet(dx: number, dy: number): void {
-    this.world.planet.rotationY += dx * 0.008;
-    this.world.planet.rotationX += dy * 0.005;
-    this.world.planet.rotationX = Math.max(-0.9, Math.min(0.9, this.world.planet.rotationX));
+    const p = this.world.planet;
+    // px/frame-ish → rad/s, clamped in tickWorld as well
+    p.spinVelY = Math.max(-0.95, Math.min(0.95, dx * 0.045));
+    p.spinVelX = Math.max(-0.45, Math.min(0.45, dy * 0.028));
   }
 
   zoom(delta: number): void {
