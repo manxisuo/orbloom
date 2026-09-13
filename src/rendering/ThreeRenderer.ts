@@ -41,6 +41,8 @@ export class ThreeRenderer {
   private oceanMesh!: THREE.Mesh;
   private atmosphere!: THREE.Mesh;
   private sunLight: THREE.DirectionalLight;
+  private ambientLight: THREE.AmbientLight;
+  private fillLight: THREE.DirectionalLight;
   private sunVisual: THREE.Mesh;
   private plantViews = new Map<string, PlantView>();
   private animalViews = new Map<string, AnimalView>();
@@ -54,6 +56,7 @@ export class ThreeRenderer {
   private personalityTint = new THREE.Color(0x7eb6ff);
   private lastPersonality = 'wild';
   private lastMushroomGlow = 0;
+  private dayFraction = 0;
   private eventVfx: EventVfx | null = null;
 
   private grassMesh: THREE.InstancedMesh | null = null;
@@ -108,9 +111,9 @@ export class ThreeRenderer {
     this.camera.position.set(0, 0.4, this.camDist);
     this.camera.lookAt(0, 0, 0);
 
-    // Lights
-    const ambient = new THREE.AmbientLight(0x6a7aaa, 0.22);
-    this.scene.add(ambient);
+    // Lights — colors are rewritten every frame by applyTimeOfDay
+    this.ambientLight = new THREE.AmbientLight(0x6a7aaa, 0.22);
+    this.scene.add(this.ambientLight);
 
     this.sunLight = new THREE.DirectionalLight(0xfff2d5, 1.35);
     this.sunLight.position.copy(SUN_DIRECTION).multiplyScalar(12);
@@ -124,9 +127,9 @@ export class ThreeRenderer {
     this.sunLight.shadow.camera.bottom = -2.2;
     this.scene.add(this.sunLight);
 
-    const fill = new THREE.DirectionalLight(0x88a0ff, 0.15);
-    fill.position.set(-4, 1, -3);
-    this.scene.add(fill);
+    this.fillLight = new THREE.DirectionalLight(0x88a0ff, 0.15);
+    this.fillLight.position.set(-4, 1, -3);
+    this.scene.add(this.fillLight);
 
     // Sun disc
     this.sunVisual = new THREE.Mesh(
@@ -702,6 +705,7 @@ export class ThreeRenderer {
     this.applyPersonality(world.personality ?? 'wild');
     this.lastPersonality = world.personality ?? 'wild';
     this.lastMushroomGlow = this.countMushroomGlow(plants);
+    this.dayFraction = world.stats.dayFraction ?? 0;
 
     this.paintTerrainColors(planet.lakes);
     this.updateLakes(planet.lakes);
@@ -1206,6 +1210,71 @@ export class ThreeRenderer {
     }
   }
 
+  /**
+   * Slow mood cycle on the whole scene: warm noon → amber dusk → cool night → soft dawn.
+   * Day length is ~45s of game time, so this breathes with play sessions.
+   */
+  private applyTimeOfDay(dt: number): void {
+    const f = this.dayFraction;
+    // Piecewise key colors (sun rgb / sun intensity / ambient rgb / ambient intensity / fill)
+    // 0 day, 0.4 dusk, 0.55 night, 0.85 dawn
+    let sunCol: THREE.Color;
+    let sunInt: number;
+    let ambCol: THREE.Color;
+    let ambInt: number;
+    let fillCol: THREE.Color;
+    let fillInt: number;
+
+    if (f < 0.35) {
+      const t = f / 0.35;
+      sunCol = new THREE.Color(0xfff2d5).lerp(new THREE.Color(0xffc48a), t * 0.55);
+      sunInt = 1.35;
+      ambCol = new THREE.Color(0x6a7aaa).lerp(new THREE.Color(0x8a8090), t * 0.4);
+      ambInt = 0.22;
+      fillCol = new THREE.Color(0x88a0ff);
+      fillInt = 0.15;
+    } else if (f < 0.5) {
+      const t = (f - 0.35) / 0.15;
+      sunCol = new THREE.Color(0xffc48a).lerp(new THREE.Color(0xff8a50), t);
+      sunInt = 1.35 - t * 0.45;
+      ambCol = new THREE.Color(0x8a8090).lerp(new THREE.Color(0x5a5070), t);
+      ambInt = 0.22 + t * 0.04;
+      fillCol = new THREE.Color(0x88a0ff).lerp(new THREE.Color(0x6a70c0), t);
+      fillInt = 0.15 + t * 0.08;
+    } else if (f < 0.85) {
+      const t = (f - 0.5) / 0.35;
+      // Night: cool moonlight
+      sunCol = new THREE.Color(0x9ab0e8);
+      sunInt = 0.55 + Math.sin(t * Math.PI) * 0.08;
+      ambCol = new THREE.Color(0x4a5578);
+      ambInt = 0.18;
+      fillCol = new THREE.Color(0x6a88c8);
+      fillInt = 0.22;
+    } else {
+      const t = (f - 0.85) / 0.15;
+      sunCol = new THREE.Color(0x9ab0e8).lerp(new THREE.Color(0xffd0a0), t);
+      sunInt = 0.55 + t * 0.8;
+      ambCol = new THREE.Color(0x4a5578).lerp(new THREE.Color(0x7a88b0), t);
+      ambInt = 0.18 + t * 0.04;
+      fillCol = new THREE.Color(0x6a88c8).lerp(new THREE.Color(0x88a0ff), t);
+      fillInt = 0.22 - t * 0.07;
+    }
+
+    const k = 1 - Math.exp(-3 * dt);
+    this.sunLight.color.lerp(sunCol, k);
+    this.sunLight.intensity += (sunInt - this.sunLight.intensity) * k;
+    this.ambientLight.color.lerp(ambCol, k);
+    this.ambientLight.intensity += (ambInt - this.ambientLight.intensity) * k;
+    this.fillLight.color.lerp(fillCol, k);
+    this.fillLight.intensity += (fillInt - this.fillLight.intensity) * k;
+
+    // Sun disc follows the same temperature
+    const sunMat = this.sunVisual.material as THREE.MeshBasicMaterial;
+    sunMat.color.lerp(sunCol, k);
+    sunMat.opacity = 0.85;
+    sunMat.transparent = true;
+  }
+
   render(dt: number): void {
     this.camera.position.normalize().multiplyScalar(this.camDist);
     this.camera.lookAt(0, 0, 0);
@@ -1213,6 +1282,8 @@ export class ThreeRenderer {
     if (this.marker.visible) {
       this.marker.lookAt(this.camera.position);
     }
+
+    this.applyTimeOfDay(dt);
 
     this.starGroup.rotation.y += 0.00012;
     this.cloudGroup.rotation.y += 0.0004;
