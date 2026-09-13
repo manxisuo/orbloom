@@ -46,7 +46,7 @@ export class ThreeRenderer {
   private animalViews = new Map<string, AnimalView>();
   private marker: THREE.Mesh;
   private cloudGroup = new THREE.Group();
-  private stars!: THREE.Points;
+  private starGroup = new THREE.Group();
   private eventVfx: EventVfx | null = null;
 
   private grassMesh: THREE.InstancedMesh | null = null;
@@ -88,12 +88,12 @@ export class ThreeRenderer {
       powerPreference: 'high-performance',
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setClearColor(0x050814, 1);
+    this.renderer.setClearColor(0x070b18, 1);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x050814, 0.045);
+    this.scene.fog = new THREE.FogExp2(0x070b18, 0.04);
 
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
     this.camera.position.set(0, 0.4, this.camDist);
@@ -163,23 +163,78 @@ export class ThreeRenderer {
   }
 
   private buildStars(): void {
-    const count = 600;
-    const positions = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      const r = 30 + Math.random() * 40;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      positions[i * 3 + 2] = r * Math.cos(phi);
+    // Pixel-sized, unfogged starfield (distance fog was erasing far points)
+    const layers: { count: number; rMin: number; rMax: number; size: number; color: number; opacity: number }[] = [
+      { count: 500, rMin: 22, rMax: 40, size: 1.2, color: 0xa8b8d8, opacity: 0.65 },
+      { count: 320, rMin: 24, rMax: 45, size: 1.8, color: 0xd8e4ff, opacity: 0.85 },
+      { count: 70, rMin: 22, rMax: 38, size: 2.6, color: 0xfff0d0, opacity: 0.7 },
+    ];
+
+    for (const layer of layers) {
+      const positions = new Float32Array(layer.count * 3);
+      const colors = new Float32Array(layer.count * 3);
+      const base = new THREE.Color(layer.color);
+      for (let i = 0; i < layer.count; i++) {
+        const r = layer.rMin + Math.random() * (layer.rMax - layer.rMin);
+        const theta = Math.random() * Math.PI * 2;
+        const band = (Math.random() + Math.random() + Math.random()) / 3;
+        const phi = Math.PI * 0.35 + band * Math.PI * 0.3;
+        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i * 3 + 1] = r * Math.cos(phi) * 0.55 + (Math.random() - 0.5) * 6;
+        positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+
+        const tint = 0.85 + Math.random() * 0.3;
+        colors[i * 3] = base.r * tint;
+        colors[i * 3 + 1] = base.g * tint;
+        colors[i * 3 + 2] = Math.min(1, base.b * tint * 1.05);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      const pts = new THREE.Points(
+        geo,
+        new THREE.PointsMaterial({
+          size: layer.size,
+          sizeAttenuation: false,
+          vertexColors: true,
+          transparent: true,
+          opacity: layer.opacity,
+          depthWrite: false,
+          fog: false,
+        }),
+      );
+      pts.renderOrder = -1;
+      this.starGroup.add(pts);
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    this.stars = new THREE.Points(
-      geo,
-      new THREE.PointsMaterial({ color: 0xc8d4ff, size: 0.05, sizeAttenuation: true, opacity: 0.85, transparent: true }),
+
+    // Soft dust band (also unfogged)
+    const dustCount = 180;
+    const dustPos = new Float32Array(dustCount * 3);
+    for (let i = 0; i < dustCount; i++) {
+      const r = 28 + Math.random() * 12;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.PI * 0.42 + (Math.random() - 0.5) * 0.22;
+      dustPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      dustPos[i * 3 + 1] = r * Math.cos(phi) * 0.5;
+      dustPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    const dustGeo = new THREE.BufferGeometry();
+    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+    const dust = new THREE.Points(
+      dustGeo,
+      new THREE.PointsMaterial({
+        color: 0x7a8ab8,
+        size: 4,
+        sizeAttenuation: false,
+        transparent: true,
+        opacity: 0.12,
+        depthWrite: false,
+        fog: false,
+      }),
     );
-    this.scene.add(this.stars);
+    dust.renderOrder = -1;
+    this.starGroup.add(dust);
+    this.scene.add(this.starGroup);
   }
 
   private buildPlanet(): void {
@@ -931,7 +986,7 @@ export class ThreeRenderer {
       this.marker.lookAt(this.camera.position);
     }
 
-    this.stars.rotation.y += 0.00015;
+    this.starGroup.rotation.y += 0.00012;
     this.cloudGroup.rotation.y += 0.0004;
     this.oceanMesh.rotation.y += 0.00005;
     this.eventVfx?.update(dt);
