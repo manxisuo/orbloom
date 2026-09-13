@@ -25,6 +25,7 @@ import { RABBIT_DECISION_INTERVAL, updateRabbit } from './behaviors/rabbit';
 import { updateBee } from './behaviors/bee';
 import { treeShadeAt } from './ecology/shade';
 import { terrainHeightAt } from '../shared/terrain';
+import { findEventDef, pickEvent, toPending } from './events/eventCards';
 
 const tmpWorld = v3();
 
@@ -79,6 +80,9 @@ export function createWorld(seed = 42): GameWorldState {
       },
     ],
     seed,
+    modifiers: { droughtDays: 0, coldDays: 0 },
+    pendingEvent: null,
+    nextEventIn: 40,
   };
 }
 
@@ -137,10 +141,13 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
       updatePlant(plant, {
         light,
         soilWater: soil,
-        dtDays: dtPlantDays,
+        dtDays: dtPlantDays * (world.modifiers.coldDays > 0 ? 0.45 : 1),
         shade,
         pollination: pollination.get(plant.id) ?? 0,
       });
+      if (world.modifiers.coldDays > 0 && plant.species !== 'tree') {
+        plant.health = Math.max(0, plant.health - 0.04 * dtPlantDays);
+      }
     }
   }
 
@@ -161,23 +168,43 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     }
   }
 
-  // Lakes evaporate based on sun + tree shade
+  // Lakes evaporate based on sun + tree shade + drought
   if (budget.ecoTick >= 1.0) {
     const step = budget.ecoTick;
     budget.ecoTick = 0;
     const dtLakeDays = step / world.time.dayLength;
+
+    if (world.modifiers.droughtDays > 0) {
+      world.modifiers.droughtDays = Math.max(0, world.modifiers.droughtDays - dtLakeDays);
+    }
+    if (world.modifiers.coldDays > 0) {
+      world.modifiers.coldDays = Math.max(0, world.modifiers.coldDays - dtLakeDays);
+    }
+
+    const droughtMul = 1 + (world.modifiers.droughtDays > 0 ? 1.6 : 0);
     evaporateLakes(
       planet.lakes,
       (localN) => {
         localToWorldNormal(tmpWorld, localN, planet.rotationX, planet.rotationY);
         return lightAmount(tmpWorld, SUN_DIRECTION);
       },
-      dtLakeDays,
+      dtLakeDays * droughtMul,
       plants,
     );
 
     // Bees appear when enough mature flowers exist
     maybeSpawnBees(world);
+
+    // Event cards
+    if (!world.pendingEvent) {
+      world.nextEventIn -= step;
+      if (world.nextEventIn <= 0) {
+        const def = pickEvent(mulberry32(Math.floor(world.time.gameTime) + world.seed));
+        world.pendingEvent = toPending(def);
+        world.nextEventIn = 55 + Math.random() * 40;
+        pushLog(world, `事件：${def.title}`);
+      }
+    }
 
     // Natural stardust trickle from healthy eco
     const s = computeStats(plants, animals, planet.lakes, world.time.gameTime);
@@ -192,6 +219,21 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
       }
     }
   }
+}
+
+export function resolvePendingEvent(world: GameWorldState, accept: boolean): string {
+  if (!world.pendingEvent) return '';
+  const def = findEventDef(world.pendingEvent.id);
+  const rng = mulberry32(Math.floor(world.time.gameTime * 1000) + world.plants.length);
+  const msg = accept ? def.apply(world, rng) : (def.decline?.(world) ?? '事件过去了。');
+  world.pendingEvent = null;
+  pushLog(world, msg);
+  refreshStats(world);
+  return msg;
+}
+
+export function makePlantForEvent(species: PlantSpecies, normal: Vec3Like, growth = 0.2): PlantState {
+  return makePlant(species, normal, growth);
 }
 
 function maybeSpawnBees(world: GameWorldState): void {

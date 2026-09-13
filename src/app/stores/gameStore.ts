@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { EcoStats, LogEntry, ToolMode } from '../../shared/types';
+import type { EcoStats, LogEntry, PendingEvent, ToolMode } from '../../shared/types';
 
 export const useGameStore = defineStore('game', () => {
   const stardust = ref(30);
@@ -21,6 +21,7 @@ export const useGameStore = defineStore('game', () => {
   const hoverWater = ref(0);
   const hoverLabel = ref('');
   const notice = ref('');
+  const pendingEvent = ref<PendingEvent | null>(null);
   let noticeTimer = 0;
 
   const dayLabel = computed(() => stats.value.day || 1);
@@ -33,6 +34,7 @@ export const useGameStore = defineStore('game', () => {
     hoverLight: number;
     hoverWater: number;
     hoverLabel: string;
+    pendingEvent?: PendingEvent | null;
   }) {
     stardust.value = payload.stardust;
     speed.value = payload.speed;
@@ -41,6 +43,7 @@ export const useGameStore = defineStore('game', () => {
     hoverLight.value = payload.hoverLight;
     hoverWater.value = payload.hoverWater;
     hoverLabel.value = payload.hoverLabel;
+    if (payload.pendingEvent !== undefined) pendingEvent.value = payload.pendingEvent;
   }
 
   function setTool(t: ToolMode) {
@@ -69,6 +72,7 @@ export const useGameStore = defineStore('game', () => {
     hoverWater,
     hoverLabel,
     notice,
+    pendingEvent,
     dayLabel,
     sync,
     setTool,

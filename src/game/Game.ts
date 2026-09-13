@@ -1,12 +1,13 @@
 import type {
   AnimalState,
   GameWorldState,
+  PendingEvent,
   PlantState,
   ToolMode,
   Vec3Like,
 } from '../shared/types';
 import { createBudget, createWorld, tickWorld, type SimBudget } from '../simulation/WorldSimulation';
-import { plantTreeAt, rain, spawnRabbitAt } from '../simulation/WorldSimulation';
+import { plantTreeAt, rain, resolvePendingEvent, spawnRabbitAt } from '../simulation/WorldSimulation';
 import { ThreeRenderer } from '../rendering/ThreeRenderer';
 import type { SaveRepository } from '../persistence/SaveRepository';
 import type { SaveMeta } from '../persistence/types';
@@ -163,6 +164,15 @@ export class Game {
 
   doRain(): void {
     rain(this.world);
+  }
+
+  get pendingEvent(): PendingEvent | null {
+    return this.world.pendingEvent;
+  }
+
+  resolveEvent(accept: boolean): void {
+    const msg = resolvePendingEvent(this.world, accept);
+    if (msg) this.notify(msg);
   }
 
   rotatePlanet(dx: number, dy: number): void {

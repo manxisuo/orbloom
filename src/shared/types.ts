@@ -90,6 +90,28 @@ export interface LogEntry {
   text: string;
 };
 
+export type EventId =
+  | 'meteor'
+  | 'coldNight'
+  | 'drought'
+  | 'strangeSeed'
+  | 'migratingBirds';
+
+export interface PendingEvent {
+  id: EventId;
+  title: string;
+  body: string;
+  acceptLabel: string;
+  declineLabel: string;
+};
+
+export interface WorldModifiers {
+  /** Remaining game-days of faster lake evaporation */
+  droughtDays: number;
+  /** Remaining game-days of extra plant stress */
+  coldDays: number;
+};
+
 export type ToolMode = 'inspect' | 'plant-tree' | 'plant-grass' | 'plant-flower' | 'spawn-rabbit' | 'rain';
 
 export interface GameWorldState {
@@ -101,4 +123,8 @@ export interface GameWorldState {
   stats: EcoStats;
   log: LogEntry[];
   seed: number;
+  modifiers: WorldModifiers;
+  pendingEvent: PendingEvent | null;
+  /** Game seconds until next event offer */
+  nextEventIn: number;
 };

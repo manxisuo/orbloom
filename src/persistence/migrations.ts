@@ -17,8 +17,10 @@ export function migrateSave(raw: unknown): SaveGame {
     throw new Error(`Unsupported save schemaVersion: ${String(data.schemaVersion)}`);
   }
 
-  // Example for future v1 → v2:
-  // if (version === 1) { data = migrateV1ToV2(data); version = 2; }
+  if (version === 1) {
+    data = migrateV1ToV2(data);
+    version = 2;
+  }
 
   if (version > SCHEMA_VERSION) {
     throw new Error(
@@ -31,4 +33,18 @@ export function migrateSave(raw: unknown): SaveGame {
   }
 
   return data as unknown as SaveGame;
+}
+
+function migrateV1ToV2(data: AnyRecord): AnyRecord {
+  const world = (data.world ?? {}) as AnyRecord;
+  return {
+    ...data,
+    schemaVersion: 2,
+    world: {
+      ...world,
+      modifiers: (world.modifiers as AnyRecord) ?? { droughtDays: 0, coldDays: 0 },
+      pendingEvent: (world.pendingEvent as AnyRecord) ?? null,
+      nextEventIn: typeof world.nextEventIn === 'number' ? world.nextEventIn : 35,
+    },
+  };
 }
