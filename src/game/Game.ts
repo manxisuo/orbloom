@@ -19,6 +19,11 @@ export type HoverInfo =
   | { kind: 'animal'; animal: AnimalState }
   | { kind: 'none' };
 
+export type SelectionInfo =
+  | { kind: 'plant'; plant: PlantState }
+  | { kind: 'animal'; animal: AnimalState }
+  | { kind: 'none' };
+
 export type GameBootMode =
   | { kind: 'new'; seed?: number }
   | { kind: 'loaded'; world: GameWorldState };
@@ -31,14 +36,14 @@ export class Game {
   budget: SimBudget;
   tool: ToolMode = 'plant-tree';
   hover: HoverInfo = { kind: 'none' };
-  selectedPlantId: string | null = null;
+  selected: { kind: 'plant' | 'animal'; id: string } | null = null;
   lastSaveAt: number | null = null;
   saveError: string | null = null;
 
   private raf = 0;
   private lastT = 0;
   private disposed = false;
-  private onUiSync: (world: GameWorldState, hover: HoverInfo) => void;
+  private onUiSync: (world: GameWorldState, hover: HoverInfo, selection: SelectionInfo) => void;
   private onNotify: ((msg: string) => void) | null;
   private uiSyncAcc = 0;
   private autosaveAcc = 0;
@@ -55,7 +60,7 @@ export class Game {
 
   constructor(
     canvas: HTMLCanvasElement,
-    onUiSync: (world: GameWorldState, hover: HoverInfo) => void,
+    onUiSync: (world: GameWorldState, hover: HoverInfo, selection: SelectionInfo) => void,
     options: {
       seed?: number;
       boot?: GameBootMode;
@@ -113,7 +118,7 @@ export class Game {
       this.uiSyncAcc += dt;
       if (this.uiSyncAcc >= 0.12) {
         this.uiSyncAcc = 0;
-        this.onUiSync(this.world, this.hover);
+        this.onUiSync(this.world, this.hover, this.getSelectionInfo());
       }
       this.raf = requestAnimationFrame(loop);
     };
@@ -150,7 +155,7 @@ export class Game {
     this.world = createWorld(seed);
     this.budget = createBudget();
     this.hover = { kind: 'none' };
-    this.selectedPlantId = null;
+    this.applySelection(null);
     this.renderer.syncWorld(this.world);
     void this.saveNow('autosave');
   }
@@ -160,7 +165,7 @@ export class Game {
     this.world = world;
     this.budget = createBudget();
     this.hover = { kind: 'none' };
-    this.selectedPlantId = null;
+    this.applySelection(null);
     this.renderer.syncWorld(this.world);
   }
 
@@ -200,6 +205,43 @@ export class Game {
       if (result.eventId === 'gentleRain') audioBus.rain();
     } else {
       audioBus.eventDecline();
+    }
+  }
+
+  getSelectionInfo(): SelectionInfo {
+    if (!this.selected) return { kind: 'none' };
+    if (this.selected.kind === 'plant') {
+      const plant = this.world.plants.find((p) => p.id === this.selected!.id);
+      if (!plant) {
+        this.clearSelection();
+        return { kind: 'none' };
+      }
+      return { kind: 'plant', plant };
+    }
+    const animal = this.world.animals.find((a) => a.id === this.selected!.id);
+    if (!animal) {
+      this.clearSelection();
+      return { kind: 'none' };
+    }
+    return { kind: 'animal', animal };
+  }
+
+  clearSelection(): void {
+    this.selected = null;
+    this.renderer.setSelectionTarget(null, null);
+    this.renderer.setSelectionMarker(null);
+  }
+
+  private applySelection(sel: { kind: 'plant' | 'animal'; id: string } | null): void {
+    this.selected = sel;
+    this.renderer.setSelectionTarget(sel?.kind ?? null, sel?.id ?? null);
+    const info = this.getSelectionInfo();
+    if (info.kind === 'plant') {
+      this.renderer.setSelectionMarker(info.plant.position.normal, info.plant.position.altitude);
+    } else if (info.kind === 'animal') {
+      this.renderer.setSelectionMarker(info.animal.position.normal, 0.02);
+    } else {
+      this.renderer.setSelectionMarker(null);
     }
   }
 
@@ -304,14 +346,15 @@ export class Game {
     }
 
     if (hit.type === 'plant') {
-      this.selectedPlantId = hit.plant.id;
+      this.applySelection({ kind: 'plant', id: hit.plant.id });
       return;
     }
     if (hit.type === 'animal') {
+      this.applySelection({ kind: 'animal', id: hit.animal.id });
       return;
     }
     if (hit.type === 'surface') {
-      this.selectedPlantId = null;
+      this.applySelection(null);
     }
   }
 

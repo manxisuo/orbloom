@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, computed } from 'vue';
-import { Game } from '../../game/Game';
+import { Game, type SelectionInfo } from '../../game/Game';
 import { useGameStore } from '../stores/gameStore';
 import type { ToolMode } from '../../shared/types';
 import { createSaveRepository } from '../../persistence';
 import type { SaveMeta } from '../../persistence/types';
 import { personalityLabel as personalityName } from '../../simulation/WorldSimulation';
 import { audioBus } from '../../game/audio';
+
+import type { SelectionPanel } from '../stores/gameStore';
 
 const store = useGameStore();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
@@ -181,7 +183,7 @@ onMounted(async () => {
     // Storage may be unavailable — still allow new game.
   }
 
-  game = new Game(canvas, (world, hover) => {
+  game = new Game(canvas, (world, hover, selection) => {
     let hoverLight = 0;
     let hoverWater = 0;
     let hoverLabel = '—';
@@ -212,6 +214,7 @@ onMounted(async () => {
       hoverLabel,
       pendingEvent: world.pendingEvent,
       personality: world.personality,
+      selection: buildSelectionPanel(selection),
     });
     tickTutorial(world.planet.rotationY, world.stats.plantCount);
   }, {
@@ -237,8 +240,51 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleString();
 }
 
+function clearSelection() {
+  game?.clearSelection();
+  store.flash('已取消选中');
+}
+
 function speciesName(s: string) {
-  return s === 'tree' ? '树木' : s === 'grass' ? '草地' : '花朵';
+  return s === 'tree' ? '树木' : s === 'grass' ? '草地' : s === 'mushroom' ? '发光蘑菇' : '花朵';
+}
+
+function animalName(s: string) {
+  return s === 'bee' ? '蜜蜂' : s === 'fox' ? '狐狸' : '兔子';
+}
+
+function pct(n: number) {
+  return `${Math.round(n * 100)}%`;
+}
+
+function buildSelectionPanel(sel: SelectionInfo): SelectionPanel {
+  if (sel.kind === 'plant') {
+    const p = sel.plant;
+    return {
+      kind: 'plant',
+      title: speciesName(p.species),
+      rows: [
+        { label: '健康', value: pct(p.health) },
+        { label: '生长', value: pct(p.growth) },
+        { label: '水分', value: pct(p.water) },
+        { label: '天龄', value: p.age.toFixed(1) },
+      ],
+    };
+  }
+  if (sel.kind === 'animal') {
+    const a = sel.animal;
+    return {
+      kind: 'animal',
+      title: animalName(a.species),
+      rows: [
+        { label: '状态', value: stateName(a.state) },
+        { label: '饱食', value: pct(1 - a.hunger) },
+        { label: '健康', value: pct(a.health) },
+        { label: '年龄', value: a.age.toFixed(1) },
+      ],
+    };
+  }
+  return { kind: 'none', title: '', rows: [] };
 }
 
 function stateName(s: string) {
@@ -471,6 +517,18 @@ onBeforeUnmount(() => {
       </ul>
       <button class="tool-btn stats-close" @click="showStats = false">收起</button>
     </aside>
+
+    <transition name="fade">
+      <div v-if="store.selection.kind !== 'none'" class="hud selection-panel">
+        <div class="panel-title">选中</div>
+        <div class="sel-title">{{ store.selection.title }}</div>
+        <div v-for="row in store.selection.rows" :key="row.label" class="sel-row">
+          <span>{{ row.label }}</span>
+          <b>{{ row.value }}</b>
+        </div>
+        <button class="tool-btn" @click="clearSelection">关闭</button>
+      </div>
+    </transition>
 
     <transition name="fade">
       <div v-if="store.pendingEvent" class="event-overlay">
@@ -791,6 +849,31 @@ onBeforeUnmount(() => {
   display: none;
   margin-top: 8px;
   justify-content: center;
+}
+
+.selection-panel {
+  bottom: 16px;
+  left: 160px;
+  width: 180px;
+  padding: 10px 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sel-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.sel-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  opacity: 0.9;
+}
+.sel-row b {
+  font-variant-numeric: tabular-nums;
 }
 
 .panel-title {
@@ -1138,6 +1221,13 @@ onBeforeUnmount(() => {
 
   .tutorial-card {
     bottom: 88px;
+  }
+
+  .selection-panel {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    bottom: 72px;
   }
 
   .notice {

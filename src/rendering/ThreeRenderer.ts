@@ -47,6 +47,8 @@ export class ThreeRenderer {
   private plantViews = new Map<string, PlantView>();
   private animalViews = new Map<string, AnimalView>();
   private marker: THREE.Mesh;
+  private selectRing: THREE.Mesh;
+  private selectionTarget: { kind: 'plant' | 'animal'; id: string } | null = null;
   private cloudGroup = new THREE.Group();
   private starGroup = new THREE.Group();
   private flockGroup = new THREE.Group();
@@ -168,6 +170,20 @@ export class ThreeRenderer {
     this.marker.visible = false;
     this.marker.renderOrder = 10;
     this.scene.add(this.marker);
+
+    this.selectRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.055, 0.075, 28),
+      new THREE.MeshBasicMaterial({
+        color: 0xf0d78c,
+        transparent: true,
+        opacity: 0.95,
+        side: THREE.DoubleSide,
+        depthTest: false,
+      }),
+    );
+    this.selectRing.visible = false;
+    this.selectRing.renderOrder = 11;
+    this.planetGroup.add(this.selectRing);
 
     this.bindInput();
     this.resize();
@@ -772,6 +788,7 @@ export class ThreeRenderer {
       }
     }
     this.syncBees(planet.radius);
+    this.updateSelectionRing(plants, animals);
   }
 
   private ensureBeeMesh(): THREE.InstancedMesh {
@@ -1282,6 +1299,11 @@ export class ThreeRenderer {
     if (this.marker.visible) {
       this.marker.lookAt(this.camera.position);
     }
+    if (this.selectRing.visible) {
+      // Ring already oriented along normal; slight pulse
+      const pulse = 1 + Math.sin(performance.now() * 0.004) * 0.06;
+      this.selectRing.scale.setScalar(pulse);
+    }
 
     this.applyTimeOfDay(dt);
 
@@ -1302,6 +1324,58 @@ export class ThreeRenderer {
     }
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Track which entity the gold ring follows (updated every syncWorld). */
+  setSelectionTarget(kind: 'plant' | 'animal' | null, id: string | null): void {
+    if (!kind || !id) {
+      this.selectionTarget = null;
+      this.selectRing.visible = false;
+      return;
+    }
+    this.selectionTarget = { kind, id };
+  }
+
+  private updateSelectionRing(plants: PlantState[], animals: AnimalState[]): void {
+    const t = this.selectionTarget;
+    if (!t) {
+      this.selectRing.visible = false;
+      return;
+    }
+    let normal: Vec3Like | null = null;
+    let altitude = 0;
+    if (t.kind === 'plant') {
+      const p = plants.find((x) => x.id === t.id);
+      if (p) {
+        normal = p.position.normal;
+        altitude = p.position.altitude;
+      }
+    } else {
+      const a = animals.find((x) => x.id === t.id);
+      if (a) {
+        normal = a.position.normal;
+        altitude = 0.02;
+      }
+    }
+    if (!normal) {
+      this.selectionTarget = null;
+      this.selectRing.visible = false;
+      return;
+    }
+    this.setSelectionMarker(normal, altitude);
+  }
+
+  /** Gold ring under the selected plant/animal (local planet space). */
+  setSelectionMarker(localNormal: Vec3Like | null, altitude = 0): void {
+    if (!localNormal) {
+      this.selectRing.visible = false;
+      return;
+    }
+    const n = new THREE.Vector3(localNormal.x, localNormal.y, localNormal.z).normalize();
+    const ground = terrainHeightAt(n.x, n.y, n.z);
+    this.selectRing.visible = true;
+    this.selectRing.position.copy(n).multiplyScalar(1 + Math.max(altitude, ground) + 0.012);
+    this.selectRing.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
   }
 
   /** Called by Game after hover to place marker. */

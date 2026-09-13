@@ -2,6 +2,19 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { EcoStats, LogEntry, PendingEvent, ToolMode } from '../../shared/types';
 
+export type SelectionPanel =
+  | {
+      kind: 'plant';
+      title: string;
+      rows: { label: string; value: string }[];
+    }
+  | {
+      kind: 'animal';
+      title: string;
+      rows: { label: string; value: string }[];
+    }
+  | { kind: 'none'; title: string; rows: never[] };
+
 export const useGameStore = defineStore('game', () => {
   const stardust = ref(30);
   const speed = ref(1);
@@ -23,6 +36,7 @@ export const useGameStore = defineStore('game', () => {
   const notice = ref('');
   const pendingEvent = ref<PendingEvent | null>(null);
   const personality = ref('wild');
+  const selection = ref<SelectionPanel>({ kind: 'none', title: '', rows: [] });
   let noticeTimer = 0;
 
   const dayLabel = computed(() => stats.value.day || 1);
@@ -37,6 +51,7 @@ export const useGameStore = defineStore('game', () => {
     hoverLabel: string;
     pendingEvent?: PendingEvent | null;
     personality?: string;
+    selection?: SelectionPanel;
   }) {
     stardust.value = payload.stardust;
     speed.value = payload.speed;
@@ -47,6 +62,7 @@ export const useGameStore = defineStore('game', () => {
     hoverLabel.value = payload.hoverLabel;
     if (payload.pendingEvent !== undefined) pendingEvent.value = payload.pendingEvent;
     if (payload.personality) personality.value = payload.personality;
+    if (payload.selection) selection.value = payload.selection;
   }
 
   function setTool(t: ToolMode) {
@@ -77,6 +93,7 @@ export const useGameStore = defineStore('game', () => {
     notice,
     pendingEvent,
     personality,
+    selection,
     dayLabel,
     sync,
     setTool,
