@@ -1043,7 +1043,16 @@ export class ThreeRenderer {
     const s = 0.45 + p.growth * (p.species === 'tree' ? 1.4 : 0.95);
     view.root.scale.setScalar(s * (0.75 + p.health * 0.25));
 
-    if (view.trunk) {
+    if (p.species === 'mushroom' && view.trunk) {
+      // Stem grows; cap rides the actual stem top so they never separate
+      const stemScale = 0.7 + p.growth * 1.1;
+      view.trunk.scale.y = stemScale;
+      // Cylinder local half-height is 0.02, centered at y=0.02 → top at 0.02 + 0.02*stemScale
+      const stemTop = 0.02 + 0.02 * stemScale;
+      view.canopy.position.y = stemTop - 0.008;
+      const capScale = 0.85 + p.growth * 0.55;
+      view.canopy.scale.set(1.3 * capScale, 0.85 * capScale, 1.3 * capScale);
+    } else if (view.trunk) {
       view.trunk.scale.y = 0.7 + p.growth * 1.3;
       view.canopy.position.y = 0.08 + p.growth * 0.12;
     }
