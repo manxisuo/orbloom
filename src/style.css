@@ -1,5 +1,6 @@
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -12,6 +13,9 @@ body,
   overflow: hidden;
   background: #050814;
   color: #e8eefc;
+  /* Avoid rubber-band / pinch zoom fighting the game */
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 button {

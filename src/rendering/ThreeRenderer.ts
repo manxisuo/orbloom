@@ -467,13 +467,23 @@ export class ThreeRenderer {
     const el = this.canvas;
     el.style.touchAction = 'none';
 
+    const activePointers = new Map<number, { x: number; y: number }>();
+    let pinchDist = 0;
+
     el.addEventListener('pointerdown', (e) => {
       el.setPointerCapture(e.pointerId);
-      this.dragging = true;
-      this.dragMoved = false;
-      this.lastX = this.downX = e.clientX;
-      this.lastY = this.downY = e.clientY;
-      this.cbs.onPointerDown(e);
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size === 1) {
+        this.dragging = true;
+        this.dragMoved = false;
+        this.lastX = this.downX = e.clientX;
+        this.lastY = this.downY = e.clientY;
+        this.cbs.onPointerDown(e);
+      } else if (activePointers.size === 2) {
+        this.dragging = false;
+        const pts = [...activePointers.values()];
+        pinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      }
     });
 
     el.addEventListener('pointermove', (e) => {
@@ -481,25 +491,44 @@ export class ThreeRenderer {
       this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
+      if (activePointers.has(e.pointerId)) {
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+
+      // Two-finger pinch zoom
+      if (activePointers.size === 2) {
+        const pts = [...activePointers.values()];
+        const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        if (pinchDist > 0) {
+          const delta = (pinchDist - d) * 2.2;
+          this.cbs.onZoom(delta);
+        }
+        pinchDist = d;
+        return;
+      }
+
       if (this.dragging) {
         const dx = e.clientX - this.lastX;
         const dy = e.clientY - this.lastY;
         this.lastX = e.clientX;
         this.lastY = e.clientY;
-        if (Math.abs(e.clientX - this.downX) + Math.abs(e.clientY - this.downY) > 4) {
+        // Slightly higher threshold for finger taps
+        if (Math.abs(e.clientX - this.downX) + Math.abs(e.clientY - this.downY) > 8) {
           this.dragMoved = true;
         }
         this.cbs.onRotate(dx, dy);
-      } else {
+      } else if (e.pointerType === 'mouse') {
         this.cbs.onHover(this.pick());
       }
     });
 
     const end = (e: PointerEvent) => {
+      activePointers.delete(e.pointerId);
+      if (activePointers.size < 2) pinchDist = 0;
       if (this.dragging && !this.dragMoved) {
         this.cbs.onClick(this.pick());
       }
-      this.dragging = false;
+      if (activePointers.size === 0) this.dragging = false;
       try {
         el.releasePointerCapture(e.pointerId);
       } catch {

@@ -15,6 +15,7 @@ let game: Game | null = null;
 const personalityLabel = computed(() => personalityName(store.personality));
 
 const showSettings = ref(false);
+const showStats = ref(false);
 const masterVol = ref(0.85);
 const musicVol = ref(0.55);
 const muted = ref(false);
@@ -370,6 +371,7 @@ onBeforeUnmount(() => {
       <button class="save-btn" :disabled="saving" @click="manualSave">
         {{ saving ? '存档中…' : '存档' }}
       </button>
+      <button class="save-btn" @click="showStats = !showStats">生态</button>
       <button class="save-btn" @click="showSettings = !showSettings">设置</button>
 
       <div class="speed-group">
@@ -419,24 +421,28 @@ onBeforeUnmount(() => {
 
     <!-- Left tools -->
     <aside class="hud tool-panel">
-      <div class="panel-title">值日工具</div>
-      <button
-        v-for="t in tools"
-        :key="t.id"
-        class="tool-btn"
-        :class="{ active: store.tool === t.id }"
-        :title="t.hint"
-        @click="pickTool(t.id)"
-      >
-        <span class="tool-label">{{ t.label }}</span>
-        <span v-if="t.cost" class="tool-cost">{{ t.cost }}</span>
-      </button>
-      <button class="tool-btn rain-btn" @click="castRain">立即降雨</button>
-      <p class="hint">拖动甩动星球（带惯性）<br />滚轮缩放<br />点击表面执行工具<br />每 45 秒自动存档</p>
+      <div class="panel-title tool-title">值日工具</div>
+      <div class="tool-scroll">
+        <button
+          v-for="t in tools"
+          :key="t.id"
+          class="tool-btn"
+          :class="{ active: store.tool === t.id }"
+          :title="t.hint"
+          @click="pickTool(t.id)"
+        >
+          <span class="tool-label">{{ t.label }}</span>
+          <span v-if="t.cost" class="tool-cost">{{ t.cost }}</span>
+        </button>
+        <button class="tool-btn rain-btn" @click="castRain">降雨</button>
+      </div>
+      <p class="hint desktop-hint">
+        拖动甩动星球（带惯性）<br />滚轮缩放<br />点击表面执行工具<br />每 45 秒自动存档
+      </p>
     </aside>
 
     <!-- Right stats -->
-    <aside class="hud stats-panel">
+    <aside class="hud stats-panel" :class="{ 'stats-open': showStats }">
       <div class="panel-title">生态状态</div>
       <div class="stat-row">
         <span>日照</span>
@@ -463,6 +469,7 @@ onBeforeUnmount(() => {
       <ul class="log">
         <li v-for="e in store.log" :key="e.id">{{ e.text }}</li>
       </ul>
+      <button class="tool-btn stats-close" @click="showStats = false">收起</button>
     </aside>
 
     <transition name="fade">
@@ -502,6 +509,7 @@ onBeforeUnmount(() => {
   position: relative;
   width: 100%;
   height: 100%;
+  min-height: 100dvh;
   overflow: hidden;
   background: #050814;
   color: #e8eefc;
@@ -773,6 +781,18 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 
+.tool-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stats-close {
+  display: none;
+  margin-top: 8px;
+  justify-content: center;
+}
+
 .panel-title {
   font-size: 11px;
   text-transform: uppercase;
@@ -1011,5 +1031,127 @@ onBeforeUnmount(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* ---- Mobile / narrow ---- */
+@media (max-width: 720px), (max-height: 500px) {
+  .top-bar {
+    top: 0;
+    left: 0;
+    right: 0;
+    border-radius: 0;
+    padding: max(8px, env(safe-area-inset-top)) 10px 8px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .brand .subtitle {
+    display: none;
+  }
+  .brand-orb {
+    width: 22px;
+    height: 22px;
+  }
+  .title {
+    font-size: 13px;
+  }
+
+  .resource .res-label {
+    display: none;
+  }
+  .res-val {
+    font-size: 16px;
+  }
+
+  .save-btn {
+    padding: 8px 10px;
+    min-height: 36px;
+  }
+
+  .speed-btn {
+    min-width: 32px;
+    min-height: 36px;
+    padding: 6px 8px;
+  }
+
+  .tool-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 8px 8px max(10px, env(safe-area-inset-bottom));
+    border-bottom: none;
+  }
+
+  .tool-title {
+    display: none;
+  }
+
+  .tool-scroll {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 6px;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tool-btn {
+    flex: 0 0 auto;
+    min-height: 40px;
+    min-width: 64px;
+    padding: 8px 12px;
+  }
+
+  .rain-btn {
+    margin-top: 0;
+  }
+
+  .desktop-hint {
+    display: none;
+  }
+
+  .stats-panel {
+    top: 56px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: min(48vh, 360px);
+    overflow: auto;
+    display: none;
+    z-index: 9;
+  }
+  .stats-panel.stats-open {
+    display: block;
+  }
+  .stats-close {
+    display: flex;
+  }
+
+  .settings-panel {
+    top: 52px;
+    right: 8px;
+    left: auto;
+    width: min(220px, calc(100% - 16px));
+  }
+
+  .tutorial-card {
+    bottom: 88px;
+  }
+
+  .notice {
+    bottom: 96px;
+    font-size: 12px;
+    max-width: calc(100% - 24px);
+  }
+
+  .event-card {
+    padding: 16px 14px 12px;
+  }
+
+  .boot-card {
+    padding: 22px 18px 16px;
+  }
 }
 </style>
