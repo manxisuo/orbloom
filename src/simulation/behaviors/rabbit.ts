@@ -25,6 +25,7 @@ export function updateRabbit(
   dt: number,
   decisionClock: number,
   foxes: AnimalState[] = [],
+  rng: () => number = Math.random,
 ): void {
   rabbit.hopPhase += dt * 8;
   rabbit.hunger = Math.min(1, rabbit.hunger + dt * 0.04);
@@ -32,7 +33,7 @@ export function updateRabbit(
   const band = lightBand(light);
 
   // Flee overrides everything except being eaten
-  if (foxes.length && rabbitFleeFromFox(rabbit, foxes, dt)) {
+  if (foxes.length && rabbitFleeFromFox(rabbit, foxes, dt, rng)) {
     return;
   }
   if (rabbit.state === 'flee') {
@@ -56,7 +57,7 @@ export function updateRabbit(
   switch (rabbit.state) {
     case 'sleep':
     case 'wander':
-      wanderMove(rabbit, dt * nightMul);
+      wanderMove(rabbit, dt * nightMul, rng);
       break;
     case 'seekFood': {
       const target = findPlant(plants, rabbit.targetPlantId);
@@ -64,7 +65,7 @@ export function updateRabbit(
         rabbit.state = 'wander';
         rabbit.targetPlantId = null;
       } else {
-        moveToward(rabbit, target.position.normal, dt * nightMul, WALK_SPEED * 1.15);
+        moveToward(rabbit, target.position.normal, dt * nightMul, WALK_SPEED * 1.15, rng);
         if (angDist(rabbit.position.normal, target.position.normal) < 0.06) {
           rabbit.state = 'eat';
           rabbit.stateTimer = 1.2;
@@ -107,20 +108,20 @@ function decide(rabbit: AnimalState, plants: PlantState[]): void {
   }
 }
 
-function wanderMove(rabbit: AnimalState, dt: number): void {
+function wanderMove(rabbit: AnimalState, dt: number, rng: () => number): void {
   if (dt <= 0) return;
-  if (Math.random() < dt * 1.2) {
-    randomTangent(rabbit.facing, rabbit.position.normal);
+  if (rng() < dt * 1.2) {
+    randomTangent(rabbit.facing, rabbit.position.normal, rng);
   }
-  moveAlongFacing(rabbit, dt, WALK_SPEED * 0.55);
+  moveAlongFacing(rabbit, dt, WALK_SPEED * 0.55, rng);
 }
 
-function moveToward(rabbit: AnimalState, target: Vec3Like, dt: number, speed: number): void {
+function moveToward(rabbit: AnimalState, target: Vec3Like, dt: number, speed: number, rng: () => number): void {
   // Desired direction = target projected on tangent plane
   copyV3(tmpA, target);
   projectOnPlane(tmpA, tmpA, rabbit.position.normal);
   if (Math.hypot(tmpA.x, tmpA.y, tmpA.z) < 1e-5) {
-    moveAlongFacing(rabbit, dt, speed);
+    moveAlongFacing(rabbit, dt, speed, rng);
     return;
   }
   normalize(tmpA, tmpA);
@@ -129,21 +130,21 @@ function moveToward(rabbit: AnimalState, target: Vec3Like, dt: number, speed: nu
   rabbit.facing.y += (tmpA.y - rabbit.facing.y) * Math.min(1, dt * 6);
   rabbit.facing.z += (tmpA.z - rabbit.facing.z) * Math.min(1, dt * 6);
   normalize(rabbit.facing, rabbit.facing);
-  moveAlongFacing(rabbit, dt, speed);
+  moveAlongFacing(rabbit, dt, speed, rng);
 }
 
-function moveAlongFacing(rabbit: AnimalState, dt: number, speed: number): void {
+function moveAlongFacing(rabbit: AnimalState, dt: number, speed: number, rng: () => number): void {
   const n = rabbit.position.normal;
   if (!Number.isFinite(n.x) || !Number.isFinite(n.y) || !Number.isFinite(n.z) || Math.hypot(n.x, n.y, n.z) < 1e-6) {
-    randomTangent(rabbit.facing, v3(0, 1, 0));
+    randomTangent(rabbit.facing, v3(0, 1, 0), rng);
     normalize(n, v3(0.3, 0.7, 0.2));
   }
   if (!Number.isFinite(rabbit.facing.x) || !Number.isFinite(rabbit.facing.y) || !Number.isFinite(rabbit.facing.z)) {
-    randomTangent(rabbit.facing, n);
+    randomTangent(rabbit.facing, n, rng);
   }
   const dir = projectOnPlane(tmpB, rabbit.facing, n);
   if (Math.hypot(dir.x, dir.y, dir.z) < 1e-5) {
-    randomTangent(rabbit.facing, n);
+    randomTangent(rabbit.facing, n, rng);
     projectOnPlane(dir, rabbit.facing, n);
   }
   normalize(dir, dir);
@@ -155,13 +156,13 @@ function moveAlongFacing(rabbit: AnimalState, dt: number, speed: number): void {
   // Re-project facing onto new tangent
   projectOnPlane(rabbit.facing, rabbit.facing, rabbit.position.normal);
   if (Math.hypot(rabbit.facing.x, rabbit.facing.y, rabbit.facing.z) < 1e-5) {
-    randomTangent(rabbit.facing, rabbit.position.normal);
+    randomTangent(rabbit.facing, rabbit.position.normal, rng);
   } else {
     normalize(rabbit.facing, rabbit.facing);
   }
 }
 
-function randomTangent(out: Vec3Like, normal: Vec3Like): void {
+function randomTangent(out: Vec3Like, normal: Vec3Like, rng: () => number = Math.random): void {
   // Any unit vector perpendicular-ish, then project
   const ref = Math.abs(normal.y) < 0.9 ? v3(0, 1, 0) : v3(1, 0, 0);
   cross(out, normal, ref);
@@ -172,7 +173,7 @@ function randomTangent(out: Vec3Like, normal: Vec3Like): void {
   }
   normalize(out, out);
   // Random flip
-  if (Math.random() < 0.5) {
+  if (rng() < 0.5) {
     out.x *= -1;
     out.y *= -1;
     out.z *= -1;

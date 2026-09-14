@@ -126,6 +126,18 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
+/**
+ * One step of the same PRNG as {@link mulberry32}, but state is threaded
+ * explicitly so it can live in (and be saved with) the game world.
+ * Deterministic: same state in → same value + next state out.
+ */
+export function randomStep(state: number): { value: number; state: number } {
+  const t = (state + 0x6d2b79f5) >>> 0;
+  let r = Math.imul(t ^ (t >>> 15), 1 | t);
+  r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+  return { value: ((r ^ (r >>> 14)) >>> 0) / 4294967296, state: t };
+}
+
 let idCounter = 1;
 export function nextId(prefix: string): string {
   return `${prefix}_${idCounter++}`;

@@ -22,6 +22,7 @@ export function updateBee(
   light: number,
   dt: number,
   doDecision: boolean,
+  rng: () => number = Math.random,
 ): { pollinated: PlantState | null } {
   bee.hopPhase += dt * 14;
   // Bees don't really "eat" plants; hunger is energy
@@ -51,8 +52,8 @@ export function updateBee(
 
   switch (bee.state) {
     case 'wander':
-      if (Math.random() < dt * 1.2) randomTangent(bee.facing, bee.position.normal);
-      moveAlongFacing(bee, dt, FLY_SPEED * 0.4);
+      if (rng() < dt * 1.2) randomTangent(bee.facing, bee.position.normal, rng);
+      moveAlongFacing(bee, dt, FLY_SPEED * 0.4, rng);
       break;
     case 'seekFlower': {
       const target = findPlant(plants, bee.targetPlantId);
@@ -60,7 +61,7 @@ export function updateBee(
         bee.state = 'wander';
         bee.targetPlantId = null;
       } else {
-        moveToward(bee, target.position.normal, dt, FLY_SPEED);
+        moveToward(bee, target.position.normal, dt, FLY_SPEED, rng);
         if (angDist(bee.position.normal, target.position.normal) < 0.08) {
           bee.state = 'pollinate';
           bee.stateTimer = 1.4;
@@ -95,11 +96,11 @@ function findPlant(plants: PlantState[], id: string | null): PlantState | null {
   return plants.find((p) => p.id === id) ?? null;
 }
 
-function moveToward(bee: AnimalState, target: Vec3Like, dt: number, speed: number): void {
+function moveToward(bee: AnimalState, target: Vec3Like, dt: number, speed: number, rng: () => number): void {
   copyV3(tmpA, target);
   projectOnPlane(tmpA, tmpA, bee.position.normal);
   if (Math.hypot(tmpA.x, tmpA.y, tmpA.z) < 1e-5) {
-    moveAlongFacing(bee, dt, speed);
+    moveAlongFacing(bee, dt, speed, rng);
     return;
   }
   normalize(tmpA, tmpA);
@@ -107,14 +108,14 @@ function moveToward(bee: AnimalState, target: Vec3Like, dt: number, speed: numbe
   bee.facing.y += (tmpA.y - bee.facing.y) * Math.min(1, dt * 8);
   bee.facing.z += (tmpA.z - bee.facing.z) * Math.min(1, dt * 8);
   normalize(bee.facing, bee.facing);
-  moveAlongFacing(bee, dt, speed);
+  moveAlongFacing(bee, dt, speed, rng);
 }
 
-function moveAlongFacing(bee: AnimalState, dt: number, speed: number): void {
+function moveAlongFacing(bee: AnimalState, dt: number, speed: number, rng: () => number): void {
   const n = bee.position.normal;
   const dir = projectOnPlane(tmpB, bee.facing, n);
   if (Math.hypot(dir.x, dir.y, dir.z) < 1e-5) {
-    randomTangent(bee.facing, n);
+    randomTangent(bee.facing, n, rng);
     projectOnPlane(dir, bee.facing, n);
   }
   normalize(dir, dir);
@@ -123,13 +124,13 @@ function moveAlongFacing(bee: AnimalState, dt: number, speed: number): void {
   normalize(bee.position.normal, tmpC);
   projectOnPlane(bee.facing, bee.facing, bee.position.normal);
   if (Math.hypot(bee.facing.x, bee.facing.y, bee.facing.z) < 1e-5) {
-    randomTangent(bee.facing, bee.position.normal);
+    randomTangent(bee.facing, bee.position.normal, rng);
   } else {
     normalize(bee.facing, bee.facing);
   }
 }
 
-function randomTangent(out: Vec3Like, normal: Vec3Like): void {
+function randomTangent(out: Vec3Like, normal: Vec3Like, rng: () => number = Math.random): void {
   const ref = Math.abs(normal.y) < 0.9 ? v3(0, 1, 0) : v3(1, 0, 0);
   cross(out, normal, ref);
   projectOnPlane(out, out, normal);
@@ -138,7 +139,7 @@ function randomTangent(out: Vec3Like, normal: Vec3Like): void {
     projectOnPlane(out, out, normal);
   }
   normalize(out, out);
-  if (Math.random() < 0.5) {
+  if (rng() < 0.5) {
     out.x *= -1;
     out.y *= -1;
     out.z *= -1;

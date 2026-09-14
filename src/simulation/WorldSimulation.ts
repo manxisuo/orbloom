@@ -17,6 +17,7 @@ import {
   nextId,
   normalize,
   randomOnSphere,
+  randomStep,
   resetIdCounter,
   v3,
 } from '../shared/math';
@@ -86,6 +87,7 @@ export function createWorld(seed = 42): GameWorldState {
       },
     ],
     seed,
+    rngState: seed >>> 0,
     modifiers: { droughtDays: 0, coldDays: 0, machineScore: 0 },
     pendingEvent: null,
     nextEventIn: 40,
@@ -105,6 +107,15 @@ export function createBudget(): SimBudget {
   return { animalDecision: 0, plantTick: 0, ecoTick: 0 };
 }
 
+/** Deterministic RNG bound to the world's persisted state. */
+function worldRng(world: GameWorldState): () => number {
+  return () => {
+    const step = randomStep(world.rngState);
+    world.rngState = step.state;
+    return step.value;
+  };
+}
+
 export const SPIN_MAX_Y = 0.95;
 export const SPIN_MAX_X = 0.45;
 const SPIN_DAMP_Y = 1.6;
@@ -117,6 +128,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
   }
   const dt = dtReal * speed;
   world.time.gameTime += dt;
+  const rng = worldRng(world);
 
   // Integrate spin with damping — drag sets velocity, release coasts
   const planet = world.planet;
@@ -187,9 +199,9 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     localToWorldNormal(tmpWorld, animal.position.normal, planet.rotationX, planet.rotationY);
     const light = lightAmount(tmpWorld, SUN_DIRECTION);
     if (animal.species === 'bee') {
-      updateBee(animal, plants, light, dt, doDecision);
+      updateBee(animal, plants, light, dt, doDecision, rng);
     } else if (animal.species === 'fox') {
-      const { caught } = updateFox(animal, animals.filter((r) => r.species === 'rabbit'), dt, doDecision);
+      const { caught } = updateFox(animal, animals.filter((r) => r.species === 'rabbit'), dt, doDecision, rng);
       if (caught) {
         const idx = animals.findIndex((r) => r.id === caught);
         if (idx >= 0) {
@@ -198,7 +210,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
         }
       }
     } else {
-      updateRabbit(animal, plants, light, dt, doDecision ? 0 : 1, foxes);
+      updateRabbit(animal, plants, light, dt, doDecision ? 0 : 1, foxes, rng);
     }
   }
 
@@ -227,9 +239,9 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     );
 
     // Bees appear when enough mature flowers exist
-    maybeSpawnBees(world);
-    maybeRabbitLife(world, dtLakeDays);
-    maybeSpawnFoxes(world);
+    maybeSpawnBees(world, rng);
+    maybeRabbitLife(world, dtLakeDays, rng);
+    maybeSpawnFoxes(world, rng);
     tickDelayedEvents(world);
     updatePersonality(world);
 
@@ -239,7 +251,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
       if (world.nextEventIn <= 0) {
         const def = pickEvent(mulberry32(Math.floor(world.time.gameTime) + world.seed));
         world.pendingEvent = toPending(def);
-        world.nextEventIn = 55 + Math.random() * 40;
+        world.nextEventIn = 55 + rng() * 40;
         pushLog(world, `事件：${def.title}`, 'event');
       }
     }
@@ -266,7 +278,7 @@ export function resolvePendingEvent(
   if (!world.pendingEvent) return null;
   const eventId = world.pendingEvent.id;
   const def = findEventDef(eventId);
-  const rng = mulberry32(Math.floor(world.time.gameTime * 1000) + world.plants.length);
+  const rng = worldRng(world);
   const result = accept
     ? def.apply(world, rng)
     : { message: def.decline?.(world) ?? '事件过去了。' as string };
@@ -282,7 +294,7 @@ export function makePlantForEvent(species: PlantSpecies, normal: Vec3Like, growt
   return makePlant(species, normal, growth);
 }
 
-function maybeSpawnBees(world: GameWorldState): void {
+function maybeSpawnBees(world: GameWorldState, rng: () => number): void {
   const bees = world.animals.filter((a) => a.species === 'bee');
   if (bees.length >= 6) return;
   const flowers = world.plants.filter((p) => p.species === 'flower' && p.growth >= 0.4 && p.health >= 0.4);
@@ -290,9 +302,9 @@ function maybeSpawnBees(world: GameWorldState): void {
   // Roughly one bee per 3 mature flowers, spawn slowly
   const want = Math.min(6, Math.floor(flowers.length / 3) + 1);
   if (bees.length >= want) return;
-  if (Math.random() > 0.35) return;
+  if (rng() > 0.35) return;
 
-  const flower = flowers[Math.floor(Math.random() * flowers.length)];
+  const flower = flowers[Math.floor(rng() * flowers.length)];
   const bee = makeBee(mulberry32(Math.floor(world.time.gameTime * 100) + bees.length));
   copyV3(bee.position.normal, flower.position.normal);
   world.animals.push(bee);
@@ -360,7 +372,7 @@ function makeFox(rng: () => number): AnimalState {
 }
 
 /** Foxes arrive when rabbits overcrowd; leave if prey is scarce. */
-function maybeSpawnFoxes(world: GameWorldState): void {
+function maybeSpawnFoxes(world: GameWorldState, rng: () => number): void {
   const foxes = world.animals.filter((a) => a.species === 'fox');
   const rabbits = world.animals.filter((a) => a.species === 'rabbit');
 
@@ -381,12 +393,12 @@ function maybeSpawnFoxes(world: GameWorldState): void {
 
   if (foxes.length >= 3) return;
   if (rabbits.length < 8) return;
-  if (Math.random() > 0.2) return;
+  if (rng() > 0.2) return;
 
   // Spawn near a random rabbit so the hunt is visible
-  const prey = rabbits[Math.floor(Math.random() * rabbits.length)];
+  const prey = rabbits[Math.floor(rng() * rabbits.length)];
   const fox = makeFox(mulberry32(Math.floor(world.time.gameTime * 91) + foxes.length));
-  jitterNormal(fox.position.normal, prey.position.normal, 0.45);
+  jitterNormal(fox.position.normal, prey.position.normal, 0.45, rng);
   world.animals.push(fox);
   if (foxes.length === 0) pushLog(world, '一只狐狸循着兔群来到了星球。', 'animal');
 }
@@ -406,7 +418,7 @@ export function spawnFoxAt(world: GameWorldState, localNormal: Vec3Like): boolea
 }
 
 /** Rabbits breed when well-fed adults meet; elders pass on. */
-function maybeRabbitLife(world: GameWorldState, dtDays: number): void {
+function maybeRabbitLife(world: GameWorldState, dtDays: number, rng: () => number): void {
   const MAX_RABBITS = 24;
   const rabbits = world.animals.filter((a) => a.species === 'rabbit');
 
@@ -414,7 +426,7 @@ function maybeRabbitLife(world: GameWorldState, dtDays: number): void {
     r.age += dtDays;
     r.breedCooldown = Math.max(0, r.breedCooldown - dtDays);
     // Old age
-    if (r.age > 12 && Math.random() < dtDays * 0.35) {
+    if (r.age > 12 && rng() < dtDays * 0.35) {
       r.health = Math.max(0, r.health - dtDays * 2);
     }
   }
@@ -439,13 +451,13 @@ function maybeRabbitLife(world: GameWorldState, dtDays: number): void {
       if (b.age < 2 || b.breedCooldown > 0 || b.hunger > 0.55 || b.health < 0.55) continue;
       if (ang(a.position.normal, b.position.normal) > 0.2) continue;
       // Litter
-      const kits = 1 + (Math.random() < 0.35 ? 1 : 0);
+      const kits = 1 + (rng() < 0.35 ? 1 : 0);
       const mid = mixNormals(a.position.normal, b.position.normal);
       for (let k = 0; k < kits && world.animals.filter((x) => x.species === 'rabbit').length < MAX_RABBITS; k++) {
         const baby = makeRabbit(mulberry32(Math.floor(world.time.gameTime * 997) + k + i), 0);
         baby.hunger = 0.3;
         baby.breedCooldown = 3;
-        jitterNormal(baby.position.normal, mid, 0.08);
+        jitterNormal(baby.position.normal, mid, 0.08, rng);
         world.animals.push(baby);
       }
       a.breedCooldown = 4;
@@ -462,8 +474,8 @@ function mixNormals(a: Vec3Like, b: Vec3Like): Vec3Like {
   return normalize(v3(), v3(a.x + b.x, a.y + b.y, a.z + b.z));
 }
 
-function jitterNormal(out: Vec3Like, base: Vec3Like, amt: number): void {
-  const j = randomOnSphere(v3(), mulberry32(Math.floor(Math.random() * 1e9)));
+function jitterNormal(out: Vec3Like, base: Vec3Like, amt: number, rng: () => number): void {
+  const j = randomOnSphere(v3(), rng);
   out.x = base.x + j.x * amt;
   out.y = base.y + j.y * amt;
   out.z = base.z + j.z * amt;

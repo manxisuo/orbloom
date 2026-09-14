@@ -36,4 +36,20 @@ describe('tickWorld rabbit integration', () => {
     // ensure none are accidentally classified only as bee
     expect(world.animals.some((a) => a.species === 'bee')).toBe(false);
   });
+
+  it('same seed replays identically (deterministic RNG)', () => {
+    const a = createWorld(123);
+    const b = createWorld(123);
+    const budgetA = createBudget();
+    const budgetB = createBudget();
+    for (let i = 0; i < 900; i++) {
+      tickWorld(a, budgetA, 1 / 60);
+      tickWorld(b, budgetB, 1 / 60);
+    }
+    expect(a.rngState).toBe(b.rngState);
+    // ids come from a module-global counter, so compare simulation state, not ids
+    const snapshot = (w: typeof a) =>
+      w.animals.map((x) => [x.species, x.position.normal.x, x.position.normal.y, x.position.normal.z, x.hunger]);
+    expect(snapshot(a)).toEqual(snapshot(b));
+  });
 });

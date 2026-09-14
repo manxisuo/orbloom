@@ -166,6 +166,8 @@ export interface GameWorldState {
   stats: EcoStats;
   log: LogEntry[];
   seed: number;
+  /** Threaded PRNG state; persisted so a seed + same actions replays identically. */
+  rngState: number;
   modifiers: WorldModifiers;
   pendingEvent: PendingEvent | null;
   /** Game seconds until next event offer */

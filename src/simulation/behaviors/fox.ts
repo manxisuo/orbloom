@@ -27,6 +27,7 @@ export function updateFox(
   rabbits: AnimalState[],
   dt: number,
   doDecision: boolean,
+  rng: () => number = Math.random,
 ): FoxHuntResult {
   fox.hopPhase += dt * 7;
   fox.hunger = Math.min(1, fox.hunger + dt * 0.03);
@@ -59,7 +60,7 @@ export function updateFox(
         fox.targetPlantId = null;
         break;
       }
-      moveToward(fox, prey.position.normal, dt, HUNT_SPEED);
+      moveToward(fox, prey.position.normal, dt, HUNT_SPEED, rng);
       if (angDist(fox.position.normal, prey.position.normal) < 0.05) {
         caught = prey.id;
         fox.hunger = Math.max(0, fox.hunger - 0.55);
@@ -69,8 +70,8 @@ export function updateFox(
       break;
     }
     default:
-      if (Math.random() < dt * 0.9) randomTangent(fox.facing, fox.position.normal);
-      moveAlongFacing(fox, dt, HUNT_SPEED * 0.35);
+      if (rng() < dt * 0.9) randomTangent(fox.facing, fox.position.normal, rng);
+      moveAlongFacing(fox, dt, HUNT_SPEED * 0.35, rng);
       break;
   }
 
@@ -82,6 +83,7 @@ export function rabbitFleeFromFox(
   rabbit: AnimalState,
   foxes: AnimalState[],
   dt: number,
+  rng: () => number = Math.random,
 ): boolean {
   const threat = nearestFox(rabbit, foxes, 0.55);
   if (!threat) return false;
@@ -95,9 +97,9 @@ export function rabbitFleeFromFox(
   if (Math.hypot(tmpA.x, tmpA.y, tmpA.z) > 1e-5) {
     normalize(tmpA, tmpA);
     copyV3(rabbit.facing, tmpA);
-    moveAlongFacing(rabbit, dt, 0.48);
+    moveAlongFacing(rabbit, dt, 0.48, rng);
   } else {
-    moveAlongFacing(rabbit, dt, 0.48);
+    moveAlongFacing(rabbit, dt, 0.48, rng);
   }
   rabbit.state = 'flee';
   return true;
@@ -135,11 +137,11 @@ function findRabbit(rabbits: AnimalState[], id: string | null): AnimalState | nu
   return rabbits.find((r) => r.id === id) ?? null;
 }
 
-function moveToward(animal: AnimalState, target: Vec3Like, dt: number, speed: number): void {
+function moveToward(animal: AnimalState, target: Vec3Like, dt: number, speed: number, rng: () => number): void {
   copyV3(tmpA, target);
   projectOnPlane(tmpA, tmpA, animal.position.normal);
   if (Math.hypot(tmpA.x, tmpA.y, tmpA.z) < 1e-5) {
-    moveAlongFacing(animal, dt, speed);
+    moveAlongFacing(animal, dt, speed, rng);
     return;
   }
   normalize(tmpA, tmpA);
@@ -147,20 +149,20 @@ function moveToward(animal: AnimalState, target: Vec3Like, dt: number, speed: nu
   animal.facing.y += (tmpA.y - animal.facing.y) * Math.min(1, dt * 7);
   animal.facing.z += (tmpA.z - animal.facing.z) * Math.min(1, dt * 7);
   normalize(animal.facing, animal.facing);
-  moveAlongFacing(animal, dt, speed);
+  moveAlongFacing(animal, dt, speed, rng);
 }
 
-function moveAlongFacing(animal: AnimalState, dt: number, speed: number): void {
+function moveAlongFacing(animal: AnimalState, dt: number, speed: number, rng: () => number): void {
   const n = animal.position.normal;
   if (!Number.isFinite(n.x) || !Number.isFinite(n.y) || !Number.isFinite(n.z) || Math.hypot(n.x, n.y, n.z) < 1e-6) {
     normalize(n, v3(0.2, 0.5, 0.84));
   }
   if (!Number.isFinite(animal.facing.x) || !Number.isFinite(animal.facing.y) || !Number.isFinite(animal.facing.z)) {
-    randomTangent(animal.facing, n);
+    randomTangent(animal.facing, n, rng);
   }
   const dir = projectOnPlane(tmpB, animal.facing, n);
   if (Math.hypot(dir.x, dir.y, dir.z) < 1e-5) {
-    randomTangent(animal.facing, n);
+    randomTangent(animal.facing, n, rng);
     projectOnPlane(dir, animal.facing, n);
   }
   normalize(dir, dir);
@@ -169,13 +171,13 @@ function moveAlongFacing(animal: AnimalState, dt: number, speed: number): void {
   normalize(animal.position.normal, tmpC);
   projectOnPlane(animal.facing, animal.facing, animal.position.normal);
   if (Math.hypot(animal.facing.x, animal.facing.y, animal.facing.z) < 1e-5) {
-    randomTangent(animal.facing, animal.position.normal);
+    randomTangent(animal.facing, animal.position.normal, rng);
   } else {
     normalize(animal.facing, animal.facing);
   }
 }
 
-function randomTangent(out: Vec3Like, normal: Vec3Like): void {
+function randomTangent(out: Vec3Like, normal: Vec3Like, rng: () => number = Math.random): void {
   const ref = Math.abs(normal.y) < 0.9 ? v3(0, 1, 0) : v3(1, 0, 0);
   cross(out, normal, ref);
   projectOnPlane(out, out, normal);
@@ -184,7 +186,7 @@ function randomTangent(out: Vec3Like, normal: Vec3Like): void {
     projectOnPlane(out, out, normal);
   }
   normalize(out, out);
-  if (Math.random() < 0.5) {
+  if (rng() < 0.5) {
     out.x *= -1;
     out.y *= -1;
     out.z *= -1;
