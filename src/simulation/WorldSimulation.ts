@@ -492,7 +492,7 @@ export function refreshStats(world: GameWorldState): void {
   );
 }
 
-function tickDelayedEvents(world: GameWorldState): void {
+export function tickDelayedEvents(world: GameWorldState): void {
   if (!world.delayedEvents?.length) return;
   const rng = mulberry32(Math.floor(world.time.gameTime * 17) + world.seed);
   for (let i = world.delayedEvents.length - 1; i >= 0; i--) {
@@ -544,7 +544,7 @@ const PERSONALITY_LABEL: Record<string, string> = {
   chaos: '混沌',
 };
 
-function updatePersonality(world: GameWorldState): void {
+export function updatePersonality(world: GameWorldState): void {
   const plants = world.plants;
   const animals = world.animals;
   const trees = plants.filter((p) => p.species === 'tree').length;
