@@ -1,5 +1,6 @@
 import type {
   AnimalState,
+  EventId,
   GameWorldState,
   PendingEvent,
   PlantState,
@@ -7,7 +8,15 @@ import type {
   Vec3Like,
 } from '../shared/types';
 import { createBudget, createWorld, tickWorld, type SimBudget } from '../simulation/WorldSimulation';
-import { plantTreeAt, rain, resolvePendingEvent, spawnFoxAt, spawnRabbitAt } from '../simulation/WorldSimulation';
+import {
+  plantTreeAt,
+  pushLog,
+  rain,
+  resolvePendingEvent,
+  spawnFoxAt,
+  spawnRabbitAt,
+} from '../simulation/WorldSimulation';
+import { findEventDef, toPending } from '../simulation/events/eventCards';
 import { ThreeRenderer } from '../rendering/ThreeRenderer';
 import type { SaveRepository } from '../persistence/SaveRepository';
 import type { SaveMeta } from '../persistence/types';
@@ -191,6 +200,14 @@ export class Game {
 
   get pendingEvent(): PendingEvent | null {
     return this.world.pendingEvent;
+  }
+
+  /** Testing/debug: force an event card to appear immediately. */
+  triggerEvent(id: EventId): void {
+    const def = findEventDef(id);
+    this.world.pendingEvent = toPending(def);
+    pushLog(this.world, `事件：${def.title}`, 'event');
+    this.notify(`已触发：${def.title}`);
   }
 
   resolveEvent(accept: boolean): void {

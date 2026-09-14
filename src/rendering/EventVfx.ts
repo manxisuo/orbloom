@@ -223,30 +223,80 @@ export class EventVfx {
 
   private playMech(n: Vec3Like | null, radius: number): void {
     const p = this.surfacePoint(n, radius);
-    const bot = new THREE.Group();
+    const normal = p.clone().normalize();
+    const root = new THREE.Group();
+    root.position.copy(p);
+    root.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+
+    const accent = 0x66ffcc;
     const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.05, 0.04, 0.06),
-      new THREE.MeshStandardMaterial({ color: 0x9aa8b8, flatShading: true, metalness: 0.4, roughness: 0.4 }),
+      new THREE.BoxGeometry(0.09, 0.07, 0.11),
+      new THREE.MeshStandardMaterial({
+        color: 0xaab6c6,
+        flatShading: true,
+        metalness: 0.5,
+        roughness: 0.35,
+        emissive: 0x14202a,
+      }),
     );
-    const lamp = new THREE.Mesh(
-      new THREE.SphereGeometry(0.012, 6, 6),
-      new THREE.MeshBasicMaterial({ color: 0x88ffcc }),
+    body.position.y = 0.05;
+    const eye = new THREE.Mesh(
+      new THREE.SphereGeometry(0.022, 8, 8),
+      new THREE.MeshBasicMaterial({ color: accent }),
     );
-    lamp.position.set(0, 0.03, 0.02);
-    bot.add(body, lamp);
-    bot.position.copy(p).multiplyScalar(1.02);
-    bot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p.clone().normalize());
-    this.group.add(bot);
+    eye.position.set(0, 0.08, 0.056);
+
+    const beaconMat = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.95 });
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.2, 6), beaconMat);
+    beacon.position.y = 0.17;
+    const beaconTip = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 8), beaconMat);
+    beaconTip.position.y = 0.28;
+
+    // On-surface radar ping: expands and repeats
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: accent,
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.085, 40), ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.003;
+
+    // Vertical light beam so it reads from a distance
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: accent,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.035, 0.55, 10, 1, true), beamMat);
+    beam.position.y = 0.275;
+
+    root.add(body, eye, beacon, beaconTip, ring, beam);
+    this.group.add(root);
+
+    const eyeMat = eye.material as THREE.MeshBasicMaterial;
     this.active.push({
-      obj: bot,
+      obj: root,
       t: 0,
-      life: 2.4,
+      life: 3,
       update: (fx) => {
-        bot.rotateY(0.8 * (1 / 60));
-        lamp.visible = Math.sin(fx.t * 12) > 0;
-        bot.position.copy(p).multiplyScalar(1.02 + Math.sin(fx.t * 4) * 0.01);
-        if (fx.t > 1.8) {
-          bot.scale.setScalar(Math.max(0.01, 1 - (fx.t - 1.8) / 0.6));
+        root.rotateY(0.9 * (1 / 60));
+        eyeMat.opacity = Math.sin(fx.t * 12) > 0 ? 1 : 0.25;
+        beaconTip.scale.setScalar(1 + Math.sin(fx.t * 10) * 0.35);
+
+        const ping = (fx.t % 1) / 1;
+        ring.scale.setScalar(1 + ping * 7);
+        ringMat.opacity = 0.8 * (1 - ping);
+
+        beamMat.opacity = 0.22 + 0.14 * Math.sin(fx.t * 8);
+        beam.scale.x = beam.scale.z = 1 + Math.sin(fx.t * 8) * 0.15;
+
+        if (fx.t > 2.4) {
+          root.scale.setScalar(Math.max(0.01, 1 - (fx.t - 2.4) / 0.6));
         }
       },
     });

@@ -2,10 +2,11 @@
 import { onBeforeUnmount, onMounted, ref, computed } from 'vue';
 import { Game, type SelectionInfo } from '../../game/Game';
 import { useGameStore } from '../stores/gameStore';
-import type { ToolMode } from '../../shared/types';
+import type { ToolMode, EventId } from '../../shared/types';
 import { createSaveRepository } from '../../persistence';
 import type { SaveMeta } from '../../persistence/types';
 import { personalityLabel as personalityName } from '../../simulation/WorldSimulation';
+import { EVENT_DEFS } from '../../simulation/events/eventCards';
 import { audioBus } from '../../game/audio';
 
 import type { SelectionPanel } from '../stores/gameStore';
@@ -370,6 +371,12 @@ function castRain() {
   store.flash('降下一场小雨');
 }
 
+const eventDefs = EVENT_DEFS;
+
+function triggerEvent(id: EventId) {
+  game?.triggerEvent(id);
+}
+
 function resolveEvent(accept: boolean) {
   game?.resolveEvent(accept);
 }
@@ -538,6 +545,18 @@ async function manualSave() {
         </label>
         <button class="tool-btn" @click="toggleMute">{{ muted ? '取消静音' : '静音' }}</button>
         <p class="hint">首次点击画面后才会出声</p>
+
+        <div class="panel-title">触发事件（测试）</div>
+        <div class="event-grid">
+          <button
+            v-for="ev in eventDefs"
+            :key="ev.id"
+            class="tool-btn event-chip"
+            @click="triggerEvent(ev.id)"
+          >
+            {{ ev.title }}
+          </button>
+        </div>
       </div>
     </transition>
 
@@ -991,6 +1010,17 @@ async function manualSave() {
 .quality-row .tool-btn {
   min-width: 48px;
   justify-content: center;
+}
+
+.event-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.event-chip {
+  justify-content: center;
+  padding: 6px 8px;
+  font-size: 12px;
 }
 
 .panel-title {
