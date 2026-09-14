@@ -13,7 +13,6 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
   { id: 'plant-mushroom', label: '种菇', hint: '夜间生长并发光', cost: 4 },
   { id: 'spawn-rabbit', label: '引兔', hint: '让一只兔子来到这里', cost: 8 },
   { id: 'spawn-fox', label: '引狐', hint: '狐狸会捕食兔子', cost: 10 },
-  { id: 'inspect', label: '观察', hint: '只查看，不建造' },
 ];
 </script>
 
@@ -40,6 +39,16 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
       >
         <span>{{ store.rainCooldown > 0 ? `冷却 ${Math.ceil(store.rainCooldown)}s` : '降雨' }}</span>
         <span class="tool-cost rain-cost"><span class="cost-dot" />{{ RAIN_COST }}</span>
+      </button>
+      <div class="tool-divider" />
+      <button
+        class="tool-btn inspect-btn"
+        :class="{ active: store.tool === 'inspect' }"
+        title="只查看，不建造"
+        @click="emit('pick', 'inspect')"
+      >
+        <span class="tool-label">观察</span>
+        <span class="tool-tag">只读</span>
       </button>
     </div>
     <p class="hint desktop-hint">
@@ -102,6 +111,18 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
   color: #f0d78c;
   opacity: 0.9;
 }
+.tool-divider {
+  height: 1px;
+  background: rgba(160, 190, 230, 0.18);
+  margin: 4px 0;
+}
+.tool-tag {
+  font-size: 10px;
+  color: #9fb4d8;
+  border: 1px solid rgba(160, 190, 230, 0.25);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
 .rain-btn {
   margin-top: 4px;
   justify-content: center;
@@ -159,6 +180,13 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
   }
   .rain-btn {
     margin-top: 0;
+  }
+  .tool-divider {
+    width: 1px;
+    height: 28px;
+    margin: 0 2px;
+    align-self: center;
+    flex: 0 0 auto;
   }
   .desktop-hint {
     display: none;

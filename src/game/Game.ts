@@ -44,7 +44,7 @@ export class Game {
   world: GameWorldState;
   renderer: ThreeRenderer;
   budget: SimBudget;
-  tool: ToolMode = 'plant-tree';
+  tool: ToolMode = 'inspect';
   hover: HoverInfo = { kind: 'none' };
   selected: { kind: 'plant' | 'animal'; id: string } | null = null;
   lastSaveAt: number | null = null;

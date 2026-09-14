@@ -18,7 +18,7 @@ export type SelectionPanel =
 export const useGameStore = defineStore('game', () => {
   const stardust = ref(30);
   const speed = ref(1);
-  const tool = ref<ToolMode>('plant-tree');
+  const tool = ref<ToolMode>('inspect');
   const stats = ref<EcoStats>({
     averageWater: 0,
     averageHealth: 0,
