@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { LakeCenter, PlantState, Vec3Like } from '../../shared/types';
 import { normalize, v3 } from '../../shared/math';
 import { updatePlant } from './growth';
-import { evaporateLakes, rainLakes, waterAt } from './water';
+import { evaporateLakes, rainLakes, rechargeLakes, waterAt } from './water';
 import { treeShadeAt } from './shade';
 
 let uid = 0;
@@ -93,6 +93,16 @@ describe('evaporateLakes', () => {
     const lakes: LakeCenter[] = [{ normal: v3(0, 1, 0), radius: 0.3, water: 0.95 }];
     rainLakes(lakes, 0.5);
     expect(lakes[0].water).toBe(1);
+  });
+
+  it('rechargeLakes rises toward full but never overflows', () => {
+    const low: LakeCenter[] = [{ normal: v3(0, 1, 0), radius: 0.3, water: 0.2 }];
+    rechargeLakes(low, 1);
+    expect(low[0].water).toBeGreaterThan(0.2);
+
+    const full: LakeCenter[] = [{ normal: v3(0, 1, 0), radius: 0.3, water: 1 }];
+    rechargeLakes(full, 1);
+    expect(full[0].water).toBe(1);
   });
 });
 

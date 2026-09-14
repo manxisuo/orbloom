@@ -1,7 +1,7 @@
 import type { AnimalState, GameWorldState, PlantState } from '../shared/types';
 import { localToWorldNormal, mulberry32, normalize, resetIdCounter, v3 } from '../shared/math';
 import { SUN_DIRECTION, lightAmount } from './climate/light';
-import { evaporateLakes, waterAt } from './ecology/water';
+import { evaporateLakes, rechargeLakes, waterAt } from './ecology/water';
 import { updatePlant } from './ecology/growth';
 import { RABBIT_DECISION_INTERVAL, updateRabbit } from './behaviors/rabbit';
 import { updateBee } from './behaviors/bee';
@@ -227,6 +227,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
       dtLakeDays * droughtMul * coldMul,
       plants,
     );
+    rechargeLakes(planet.lakes, dtLakeDays);
 
     // Bees appear when enough mature flowers exist
     maybeSpawnBees(world, rng);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameWorldState } from '../shared/types';
-import { mulberry32, randomOnSphere, v3 } from '../shared/math';
+import { mulberry32, normalize, randomOnSphere, v3 } from '../shared/math';
 import {
   createBudget,
   createWorld,
@@ -37,6 +37,18 @@ function averageLake(world: GameWorldState): number {
   return lakes.length ? lakes.reduce((s, l) => s + l.water, 0) / lakes.length : 0;
 }
 
+/** A sensible planting spot: jittered toward a lake so the plant can find water. */
+function plantSpot(world: GameWorldState, rng: () => number) {
+  const lakes = world.planet.lakes;
+  const c = lakes.length ? lakes[Math.floor(rng() * lakes.length)].normal : { x: 0, y: 1, z: 0 };
+  const n = randomOnSphere(v3(), rng);
+  const t = 0.7;
+  return normalize(
+    v3(),
+    v3(n.x + (c.x - n.x) * t, n.y + (c.y - n.y) * t, n.z + (c.z - n.z) * t),
+  );
+}
+
 /** A simple, deterministic "reasonable player" policy. */
 function caretaker(world: GameWorldState, rng: () => number): void {
   if (averageLake(world) < 0.35) {
@@ -45,11 +57,11 @@ function caretaker(world: GameWorldState, rng: () => number): void {
   }
   const c = speciesCounts(world);
   if (c.tree < 8 && world.resources.stardust >= 5) {
-    plantTreeAt(world, randomOnSphere(v3(), rng));
+    plantTreeAt(world, plantSpot(world, rng));
     return;
   }
   if (c.grass < 30 && world.resources.stardust >= 2) {
-    plantTreeAt(world, randomOnSphere(v3(), rng), 'grass');
+    plantTreeAt(world, plantSpot(world, rng), 'grass');
   }
 }
 
@@ -76,6 +88,9 @@ function playthrough() {
   const playerRng = mulberry32(SEED ^ 0x9e3779b9);
   const dayLength = world.time.dayLength;
   const totalSeconds = DAYS * dayLength;
+  // Model the core loop: keep the planet turning one revolution per day so every
+  // location cycles through day/dusk/night instead of being constantly sunlit.
+  const spinPerSecond = (Math.PI * 2) / dayLength;
 
   const rows: string[] = [];
   const events = { accept: 0, decline: 0 };
@@ -85,6 +100,8 @@ function playthrough() {
   let dayMark = 0;
 
   for (let t = 0; t < totalSeconds; t += DT) {
+    world.planet.spinVelY = spinPerSecond;
+    world.planet.spinVelX = 0;
     tickWorld(world, budget, DT);
 
     if (world.pendingEvent) {

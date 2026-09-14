@@ -18,6 +18,13 @@ export const RAIN_COOLDOWN_DAYS = 0.25;
 /** Passive stardust generated per game-day per point of stability. */
 export const STARDUST_PER_DAY_PER_STABILITY = 6;
 
+/**
+ * Natural lake recharge, per game-day, proportional to how far the lake is
+ * below full. Balances evaporation so lakes settle at an equilibrium instead
+ * of draining to empty: equilibrium water ≈ 1 - evaporation / recharge.
+ */
+export const LAKE_RECHARGE_PER_DAY = 0.13;
+
 /** Event cadence, in game-days. */
 export const EVENT_FIRST_DAYS = 0.9;
 export const EVENT_GAP_MIN_DAYS = 1.2;

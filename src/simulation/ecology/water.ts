@@ -1,6 +1,7 @@
 import type { LakeCenter, PlantState, Vec3Like } from '../../shared/types';
 import { angularDistance } from '../../shared/math';
 import { treeShadeAt } from './shade';
+import { LAKE_RECHARGE_PER_DAY } from '../tuning';
 
 /** 0..1 soil moisture near a surface normal, given lakes. */
 export function waterAt(localNormal: Vec3Like, lakes: LakeCenter[]): number {
@@ -35,6 +36,16 @@ export function evaporateLakes(
 export function rainLakes(lakes: LakeCenter[], amount = 0.12): void {
   for (const lake of lakes) {
     lake.water = Math.min(1, lake.water + amount);
+  }
+}
+
+/**
+ * Slow natural replenishment toward full (groundwater / condensation).
+ * Offsets evaporation so lakes reach an equilibrium instead of emptying.
+ */
+export function rechargeLakes(lakes: LakeCenter[], dtDays: number, rate = LAKE_RECHARGE_PER_DAY): void {
+  for (const lake of lakes) {
+    lake.water = Math.min(1, lake.water + rate * (1 - lake.water) * dtDays);
   }
 }
 
