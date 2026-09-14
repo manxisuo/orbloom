@@ -15,6 +15,9 @@ export const DAY_LENGTH = 60;
 /** Rain action cooldown, in game-days. */
 export const RAIN_COOLDOWN_DAYS = 0.25;
 
+/** Passive stardust generated per game-day per point of stability. */
+export const STARDUST_PER_DAY_PER_STABILITY = 6;
+
 /** Event cadence, in game-days. */
 export const EVENT_FIRST_DAYS = 0.9;
 export const EVENT_GAP_MIN_DAYS = 1.2;
@@ -22,4 +25,4 @@ export const EVENT_GAP_MAX_DAYS = 2.1;
 
 /** Planet wish cadence, in game-days. */
 export const WISH_FIRST_DAYS = 0.33;
-export const WISH_GAP_DAYS = 0.67;
+export const WISH_GAP_DAYS = 1.2;

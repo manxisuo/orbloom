@@ -51,7 +51,7 @@ describe('tickWishes', () => {
     tickWishes(world, 1);
     expect(world.wishesCompleted).toBe(1);
     expect(world.wish).toBeNull();
-    expect(world.resources.stardust).toBe(20);
+    expect(world.resources.stardust).toBe(12);
     expect(world.nextWishIn).toBeCloseTo(WISH_GAP_DAYS * world.time.dayLength);
   });
 

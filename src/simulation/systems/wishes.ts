@@ -34,25 +34,25 @@ export const WISH_DEFS: WishDef[] = [
     id: 'forestWish',
     durationDays: 3,
     condition: { kind: 'plantSpeciesCount', species: 'tree', min: 8 },
-    reward: { stardust: 20, healTrees: 0.2 },
+    reward: { stardust: 12, healTrees: 0.2 },
   },
   {
     id: 'lakeWish',
     durationDays: 2,
     condition: { kind: 'averageLakeWater', min: 0.6 },
-    reward: { stardust: 12, refillLakes: 0.1 },
+    reward: { stardust: 8, refillLakes: 0.1 },
   },
   {
     id: 'rabbitWish',
     durationDays: 3,
     condition: { kind: 'animalSpeciesCount', species: 'rabbit', min: 6 },
-    reward: { stardust: 15 },
+    reward: { stardust: 10 },
   },
   {
     id: 'stabilityWish',
     durationDays: 2,
     condition: { kind: 'stability', min: 0.6 },
-    reward: { stardust: 18 },
+    reward: { stardust: 12 },
   },
 ];
 

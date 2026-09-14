@@ -16,7 +16,7 @@ import { makeRabbit, maybeRabbitLife, maybeSpawnBees, maybeSpawnFoxes } from './
 import { maybeOfferEvent, tickDelayedEvents } from './systems/events';
 import { updatePersonality } from './systems/personality';
 import { tickWishes } from './systems/wishes';
-import { DAY_LENGTH, EVENT_FIRST_DAYS, WISH_FIRST_DAYS } from './tuning';
+import { DAY_LENGTH, EVENT_FIRST_DAYS, STARDUST_PER_DAY_PER_STABILITY, WISH_FIRST_DAYS } from './tuning';
 
 const tmpWorld = v3();
 
@@ -241,7 +241,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     // Natural stardust trickle from healthy eco
     const s = computeStats(plants, animals, planet.lakes, world.time.gameTime);
     world.stats = s;
-    world.resources.stardust += s.stability * dtLakeDays * 18;
+    world.resources.stardust += s.stability * dtLakeDays * STARDUST_PER_DAY_PER_STABILITY;
 
     // Cull withered grass/flowers
     for (let i = plants.length - 1; i >= 0; i--) {
