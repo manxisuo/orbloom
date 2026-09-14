@@ -14,10 +14,18 @@ const store = useGameStore();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 let game: Game | null = null;
 
-const personalityLabel = computed(() => personalityName(store.personality));
+const personalityLabel = computed(() =>
+  store.worldReady ? personalityName(store.personality) : '-',
+);
 
 const showSettings = ref(false);
 const showStats = ref(false);
+const qualityOptions = [
+  { id: 'low' as const, label: '低' },
+  { id: 'medium' as const, label: '中' },
+  { id: 'high' as const, label: '高' },
+];
+const quality = ref<'low' | 'medium' | 'high'>('high');
 const masterVol = ref(0.85);
 const musicVol = ref(0.55);
 const muted = ref(false);
@@ -225,6 +233,13 @@ onMounted(async () => {
   });
 
   game.setTool(store.tool);
+  const savedQ = localStorage.getItem('orbloom:quality') as 'low' | 'medium' | 'high' | null;
+  if (savedQ === 'low' || savedQ === 'medium' || savedQ === 'high') {
+    quality.value = savedQ;
+    game.renderer.setQuality(savedQ);
+  } else {
+    quality.value = game.renderer.getQuality();
+  }
 
   if (hasExistingSave.value) {
     game.setSpeed(0);
@@ -232,6 +247,7 @@ onMounted(async () => {
   } else {
     game.start();
     bootReady.value = false;
+    store.setWorldReady(true);
     initTutorial(false);
   }
 });
@@ -369,6 +385,7 @@ function continueGame() {
   store.setSpeed(1);
   game.start();
   bootReady.value = false;
+  store.setWorldReady(true);
   initTutorial(true);
   store.flash('继续值日');
 }
@@ -381,6 +398,7 @@ function startNewGame() {
     store.setSpeed(1);
     game?.start();
     bootReady.value = false;
+    store.setWorldReady(true);
     initTutorial(false);
     store.flash('新的星球苏醒了');
   };
@@ -388,6 +406,13 @@ function startNewGame() {
     if (!window.confirm('已有存档。开始新星球将覆盖自动存档，确定吗？')) return;
   }
   go();
+}
+
+function setQuality(level: 'low' | 'medium' | 'high') {
+  quality.value = level;
+  game?.renderer.setQuality(level);
+  localStorage.setItem('orbloom:quality', level);
+  store.flash(`画质：${level === 'low' ? '低' : level === 'medium' ? '中' : '高'}`);
 }
 
 async function manualSave() {
@@ -448,7 +473,7 @@ async function manualSave() {
 
       <div class="resource">
         <span class="dot stardust-dot" />
-        <span class="res-val">{{ Math.floor(store.stardust) }}</span>
+        <span class="res-val">{{ store.stardustLabel }}</span>
         <span class="res-label">星尘</span>
       </div>
 
@@ -473,6 +498,19 @@ async function manualSave() {
 
     <transition name="fade">
       <div v-if="showSettings" class="hud settings-panel">
+        <div class="panel-title">画质</div>
+        <div class="tool-scroll quality-row">
+          <button
+            v-for="q in qualityOptions"
+            :key="q.id"
+            class="tool-btn"
+            :class="{ active: quality === q.id }"
+            @click="setQuality(q.id)"
+          >
+            {{ q.label }}
+          </button>
+        </div>
+
         <div class="panel-title">声音</div>
         <label class="vol-row">
           <span>总音量</span>
@@ -943,6 +981,16 @@ async function manualSave() {
 }
 .sel-row b {
   font-variant-numeric: tabular-nums;
+}
+
+.quality-row {
+  flex-direction: row !important;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.quality-row .tool-btn {
+  min-width: 48px;
+  justify-content: center;
 }
 
 .panel-title {

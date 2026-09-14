@@ -95,6 +95,15 @@ export class ThreeRenderer {
   private canvas: HTMLCanvasElement;
   private up = new THREE.Vector3(0, 1, 0);
 
+  // Shared geo/material + object pools (avoid alloc/churn on spawn/despawn)
+  private geoCache = new Map<string, THREE.BufferGeometry>();
+  private matCache = new Map<string, THREE.Material>();
+  private poolTree: THREE.Group[] = [];
+  private poolMushroom: THREE.Group[] = [];
+  private poolRabbit: THREE.Group[] = [];
+  private poolFox: THREE.Group[] = [];
+  private quality: 'low' | 'medium' | 'high' = 'high';
+
   constructor(canvas: HTMLCanvasElement, cbs: RendererCallbacks) {
     this.canvas = canvas;
     this.cbs = cbs;
@@ -105,7 +114,6 @@ export class ThreeRenderer {
       alpha: false,
       powerPreference: 'high-performance',
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x070b18, 1);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -134,7 +142,6 @@ export class ThreeRenderer {
     this.sunLight = new THREE.DirectionalLight(0xfff2d5, 1.35);
     this.sunLight.position.copy(SUN_DIRECTION).multiplyScalar(12);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.set(2048, 2048);
     this.sunLight.shadow.camera.near = 2;
     this.sunLight.shadow.camera.far = 20;
     this.sunLight.shadow.camera.left = -1.6;
@@ -202,9 +209,59 @@ export class ThreeRenderer {
     this.selectRing.renderOrder = 11;
     this.planetGroup.add(this.selectRing);
 
+    this.applyQuality(this.defaultQuality(), true);
+
     this.bindInput();
     this.resize();
     window.addEventListener('resize', this.resize);
+  }
+
+  private defaultQuality(): 'low' | 'medium' | 'high' {
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    const small = Math.min(window.innerWidth, window.innerHeight) < 720;
+    return coarse || small ? 'medium' : 'high';
+  }
+
+  setQuality(level: 'low' | 'medium' | 'high'): void {
+    this.applyQuality(level, false);
+  }
+
+  getQuality(): 'low' | 'medium' | 'high' {
+    return this.quality;
+  }
+
+  private applyQuality(level: 'low' | 'medium' | 'high', init: boolean): void {
+    this.quality = level;
+    const dpr = window.devicePixelRatio || 1;
+    const ratio =
+      level === 'low' ? 1 : level === 'medium' ? Math.min(dpr, 1.5) : Math.min(dpr, 2);
+    this.renderer.setPixelRatio(ratio);
+    const shadowSize = level === 'low' ? 512 : level === 'medium' ? 1024 : 2048;
+    this.sunLight.shadow.mapSize.set(shadowSize, shadowSize);
+    this.sunLight.castShadow = level !== 'low';
+    if (this.sunLight.shadow.map) {
+      this.sunLight.shadow.map.dispose();
+      this.sunLight.shadow.map = null as unknown as THREE.WebGLRenderTarget;
+    }
+    if (!init) this.resize();
+  }
+
+  private geo(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
+    let g = this.geoCache.get(key);
+    if (!g) {
+      g = make();
+      this.geoCache.set(key, g);
+    }
+    return g;
+  }
+
+  private mat(key: string, make: () => THREE.Material): THREE.Material {
+    let m = this.matCache.get(key);
+    if (!m) {
+      m = make();
+      this.matCache.set(key, m);
+    }
+    return m;
   }
 
   private buildStars(): void {
@@ -820,7 +877,7 @@ export class ThreeRenderer {
     for (const [id, view] of this.plantViews) {
       if (!seenPlants.has(id)) {
         this.planetGroup.remove(view.root);
-        disposeObject(view.root);
+        this.releasePlantView(view);
         this.plantViews.delete(id);
       }
     }
@@ -849,12 +906,36 @@ export class ThreeRenderer {
     for (const [id, view] of this.animalViews) {
       if (!seenAnimals.has(id)) {
         this.planetGroup.remove(view.root);
-        disposeObject(view.root);
+        this.releaseAnimalView(view);
         this.animalViews.delete(id);
       }
     }
     this.syncBees(planet.radius);
     this.updateSelectionRing(plants, animals);
+  }
+
+  private releasePlantView(view: PlantView): void {
+    const species = view.plant.species;
+    const pool = species === 'mushroom' ? this.poolMushroom : this.poolTree;
+    if (pool.length < 64) {
+      view.root.scale.setScalar(1);
+      view.root.visible = false;
+      pool.push(view.root);
+    } else {
+      // Shared geo/mat — do not dispose children
+      view.root.clear();
+    }
+  }
+
+  private releaseAnimalView(view: AnimalView): void {
+    const pool = view.animal.species === 'fox' ? this.poolFox : this.poolRabbit;
+    if (pool.length < 48) {
+      view.root.scale.setScalar(1);
+      view.root.visible = false;
+      pool.push(view.root);
+    } else {
+      view.root.clear();
+    }
   }
 
   private ensureBeeMesh(): THREE.InstancedMesh {
@@ -1085,22 +1166,49 @@ export class ThreeRenderer {
   }
 
   private createPlantView(plant: PlantState): PlantView {
+    const isMushroom = plant.species === 'mushroom';
+    const pool = isMushroom ? this.poolMushroom : this.poolTree;
+    const reused = pool.pop();
+    if (reused) {
+      reused.name = plant.id;
+      reused.visible = true;
+      const trunk = reused.getObjectByName('trunk') as THREE.Mesh;
+      const canopy = reused.getObjectByName('canopy') as THREE.Mesh;
+      return { root: reused, plant, canopy, trunk };
+    }
+
     const root = new THREE.Group();
     root.name = plant.id;
 
-    if (plant.species === 'mushroom') {
-      const stemMat = new THREE.MeshStandardMaterial({ color: 0xd8c8b0, flatShading: true, roughness: 0.9 });
-      const capMat = new THREE.MeshStandardMaterial({
-        color: 0x7ec8ff,
-        emissive: 0x3a90c8,
-        emissiveIntensity: 0.85,
-        flatShading: true,
-        roughness: 0.5,
+    if (isMushroom) {
+      const stemMat = this.mat('mushroomStem', () => {
+        const m = new THREE.MeshStandardMaterial({ color: 0xd8c8b0, flatShading: true, roughness: 0.9 });
+        return m;
+      }) as THREE.MeshStandardMaterial;
+      // Cap needs unique emissive per instance for glow — clone material only for cap
+      const capBase = this.mat('mushroomCapBase', () => {
+        const m = new THREE.MeshStandardMaterial({
+          color: 0x7ec8ff,
+          emissive: 0x3a90c8,
+          emissiveIntensity: 0.85,
+          flatShading: true,
+          roughness: 0.5,
+        });
+        return m;
       });
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, 0.04, 5), stemMat);
+      const capMat = capBase.clone();
+      const trunk = new THREE.Mesh(
+        this.geo('mushroomStem', () => new THREE.CylinderGeometry(0.012, 0.018, 0.04, 5)),
+        stemMat,
+      );
+      trunk.name = 'trunk';
       trunk.position.y = 0.02;
       trunk.castShadow = true;
-      const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.035, 7, 5, 0, Math.PI * 2, 0, Math.PI * 0.55), capMat);
+      const canopy = new THREE.Mesh(
+        this.geo('mushroomCap', () => new THREE.SphereGeometry(0.035, 7, 5, 0, Math.PI * 2, 0, Math.PI * 0.55)),
+        capMat,
+      );
+      canopy.name = 'canopy';
       canopy.position.y = 0.045;
       canopy.scale.set(1.3, 0.85, 1.3);
       canopy.castShadow = true;
@@ -1108,12 +1216,24 @@ export class ThreeRenderer {
       return { root, plant, canopy, trunk };
     }
 
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b5a3c, flatShading: true, roughness: 0.9 });
-    const canopyMat = new THREE.MeshStandardMaterial({ color: 0x3f9b4f, flatShading: true, roughness: 0.85 });
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.026, 0.1, 5), trunkMat);
+    const trunkMat = this.mat('treeTrunk', () => {
+      return new THREE.MeshStandardMaterial({ color: 0x8b5a3c, flatShading: true, roughness: 0.9 });
+    });
+    const canopyMat = this.mat('treeCanopy', () => {
+      return new THREE.MeshStandardMaterial({ color: 0x3f9b4f, flatShading: true, roughness: 0.85 });
+    });
+    const trunk = new THREE.Mesh(
+      this.geo('treeTrunk', () => new THREE.CylinderGeometry(0.016, 0.026, 0.1, 5)),
+      trunkMat,
+    );
+    trunk.name = 'trunk';
     trunk.position.y = 0.05;
     trunk.castShadow = true;
-    const canopy = new THREE.Mesh(new THREE.IcosahedronGeometry(0.09, 0), canopyMat);
+    const canopy = new THREE.Mesh(
+      this.geo('treeCanopy', () => new THREE.IcosahedronGeometry(0.09, 0)),
+      canopyMat,
+    );
+    canopy.name = 'canopy';
     canopy.position.y = 0.15;
     canopy.castShadow = true;
     root.add(trunk, canopy);
@@ -1131,10 +1251,8 @@ export class ThreeRenderer {
     view.root.scale.setScalar(s * (0.75 + p.health * 0.25));
 
     if (p.species === 'mushroom' && view.trunk) {
-      // Stem grows; cap rides the actual stem top so they never separate
       const stemScale = 0.7 + p.growth * 1.1;
       view.trunk.scale.y = stemScale;
-      // Cylinder local half-height is 0.02, centered at y=0.02 → top at 0.02 + 0.02*stemScale
       const stemTop = 0.02 + 0.02 * stemScale;
       view.canopy.position.y = stemTop - 0.008;
       const capScale = 0.85 + p.growth * 0.55;
@@ -1144,7 +1262,7 @@ export class ThreeRenderer {
       view.canopy.position.y = 0.08 + p.growth * 0.12;
     }
 
-    // Health tint
+    // Health tint — trees share one canopy material, so tint is global-ish (acceptable)
     const mat = view.canopy.material as THREE.MeshStandardMaterial;
     if (p.species === 'mushroom') {
       const glow = 0.4 + p.growth * 0.8;
@@ -1152,58 +1270,88 @@ export class ThreeRenderer {
       mat.color.setHex(0x7ec8ff).lerp(new THREE.Color(0xa8e0ff), p.health);
       return;
     }
-    const healthy = p.species === 'flower' ? new THREE.Color(0xe88bc4) : new THREE.Color(0x3f9b4f);
+    const healthy = new THREE.Color(0x3f9b4f);
     const sick = new THREE.Color(0xa8a05a);
     mat.color.copy(sick).lerp(healthy, p.health);
   }
 
   private createAnimalView(animal: AnimalState): AnimalView {
+    const isFox = animal.species === 'fox';
+    const pool = isFox ? this.poolFox : this.poolRabbit;
+    const reused = pool.pop();
+    if (reused) {
+      reused.name = animal.id;
+      reused.visible = true;
+      // Find first mesh as "canopy" stand-in — AnimalView only needs root+animal
+      return { root: reused, animal };
+    }
+
     const root = new THREE.Group();
     root.name = animal.id;
 
-    const isFox = animal.species === 'fox';
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: isFox ? 0xe07a3a : 0xf0ebe3,
-      flatShading: true,
-      roughness: 0.85,
+    const bodyMat = this.mat(isFox ? 'foxBody' : 'rabbitBody', () => {
+      return new THREE.MeshStandardMaterial({
+        color: isFox ? 0xe07a3a : 0xf0ebe3,
+        flatShading: true,
+        roughness: 0.85,
+      });
     });
-    const accentMat = new THREE.MeshStandardMaterial({
-      color: isFox ? 0xf5f0e8 : 0xf0b6c8,
-      flatShading: true,
-      roughness: 0.8,
+    const accentMat = this.mat(isFox ? 'foxAccent' : 'rabbitAccent', () => {
+      return new THREE.MeshStandardMaterial({
+        color: isFox ? 0xf5f0e8 : 0xf0b6c8,
+        flatShading: true,
+        roughness: 0.8,
+      });
     });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, flatShading: true });
+    const darkMat = this.mat('animalDark', () => {
+      return new THREE.MeshStandardMaterial({ color: 0x2a2a2a, flatShading: true });
+    });
 
-    const body = new THREE.Mesh(new THREE.SphereGeometry(isFox ? 0.05 : 0.045, 6, 5), bodyMat);
+    const bodyKey = isFox ? 'foxBody' : 'rabbitBody';
+    const body = new THREE.Mesh(
+      this.geo(bodyKey, () => new THREE.SphereGeometry(isFox ? 0.05 : 0.045, 6, 5)),
+      bodyMat,
+    );
     body.scale.set(isFox ? 1.0 : 1.1, isFox ? 0.75 : 0.9, isFox ? 1.55 : 1.3);
     body.position.y = 0.048;
     body.castShadow = true;
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(isFox ? 0.028 : 0.032, 6, 5), bodyMat);
+    const head = new THREE.Mesh(
+      this.geo(isFox ? 'foxHead' : 'rabbitHead', () => new THREE.SphereGeometry(isFox ? 0.028 : 0.032, 6, 5)),
+      bodyMat,
+    );
     head.position.set(0, isFox ? 0.065 : 0.07, isFox ? 0.058 : 0.05);
     head.castShadow = true;
 
-    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.03, 5), accentMat);
+    const snout = new THREE.Mesh(
+      this.geo(isFox ? 'foxSnout' : 'rabbitSnout', () => new THREE.ConeGeometry(0.014, 0.03, 5)),
+      accentMat,
+    );
     snout.rotation.x = Math.PI / 2;
     snout.position.set(0, isFox ? 0.058 : 0.062, isFox ? 0.082 : 0.078);
 
-    const earL = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.028, 4), bodyMat);
+    const earL = new THREE.Mesh(
+      this.geo(isFox ? 'foxEar' : 'rabbitEar', () => new THREE.ConeGeometry(0.012, 0.028, 4)),
+      bodyMat,
+    );
     earL.position.set(-0.016, isFox ? 0.1 : 0.11, isFox ? 0.05 : 0.04);
     const earR = earL.clone();
     earR.position.x = 0.016;
 
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.006, 4, 4), darkMat);
+    const eyeGeo = this.geo('animalEye', () => new THREE.SphereGeometry(0.006, 4, 4));
+    const eyeL = new THREE.Mesh(eyeGeo, darkMat);
     eyeL.position.set(-0.014, isFox ? 0.072 : 0.078, isFox ? 0.072 : 0.068);
     const eyeR = eyeL.clone();
     eyeR.position.x = 0.014;
 
-    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.008, 4, 4), darkMat);
+    const nose = new THREE.Mesh(this.geo('animalNose', () => new THREE.SphereGeometry(0.008, 4, 4)), darkMat);
     nose.position.set(0, isFox ? 0.058 : 0.062, isFox ? 0.095 : 0.09);
 
-    // Fox: bushy tail; rabbit: puff tail
     const tail = new THREE.Mesh(
-      isFox ? new THREE.ConeGeometry(0.022, 0.07, 5) : new THREE.SphereGeometry(0.015, 4, 4),
-      isFox ? bodyMat : bodyMat,
+      this.geo(isFox ? 'foxTail' : 'rabbitTail', () =>
+        isFox ? new THREE.ConeGeometry(0.022, 0.07, 5) : new THREE.SphereGeometry(0.015, 4, 4),
+      ),
+      bodyMat,
     );
     if (isFox) {
       tail.rotation.x = -0.9;

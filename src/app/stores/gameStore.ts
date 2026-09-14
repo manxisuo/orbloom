@@ -40,9 +40,15 @@ export const useGameStore = defineStore('game', () => {
   const pendingEvent = ref<PendingEvent | null>(null);
   const personality = ref('wild');
   const selection = ref<SelectionPanel>({ kind: 'none', title: '', rows: [] });
+  /** False until the first playable world is live — UI shows "-" placeholders. */
+  const worldReady = ref(false);
   let noticeTimer = 0;
 
-  const dayLabel = computed(() => stats.value.day || 1);
+  const dayLabel = computed(() => (worldReady.value ? stats.value.day || 1 : '-'));
+  const stardustLabel = computed(() =>
+    worldReady.value ? String(Math.floor(stardust.value)) : '-',
+  );
+  const personalityDisplay = computed(() => (worldReady.value ? personality.value : '-'));
 
   const filteredLog = computed(() => {
     if (logFilter.value === 'all') return log.value;
@@ -104,6 +110,10 @@ export const useGameStore = defineStore('game', () => {
     speed.value = s;
   }
 
+  function setWorldReady(v: boolean) {
+    worldReady.value = v;
+  }
+
   function flash(msg: string) {
     notice.value = msg;
     window.clearTimeout(noticeTimer);
@@ -125,7 +135,10 @@ export const useGameStore = defineStore('game', () => {
     pendingEvent,
     personality,
     selection,
+    worldReady,
     dayLabel,
+    stardustLabel,
+    personalityDisplay,
     logFilter,
     filteredLog,
     replayOpen,
@@ -134,6 +147,7 @@ export const useGameStore = defineStore('game', () => {
     sync,
     setTool,
     setSpeed,
+    setWorldReady,
     flash,
   };
 });
