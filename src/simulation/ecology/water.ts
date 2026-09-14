@@ -1,5 +1,6 @@
 import type { LakeCenter, PlantState, Vec3Like } from '../../shared/types';
 import { angularDistance } from '../../shared/math';
+import { lakeShoreRadius } from '../../shared/lakeShape';
 import { treeShadeAt } from './shade';
 import { LAKE_RECHARGE_PER_DAY } from '../tuning';
 
@@ -9,7 +10,7 @@ export function waterAt(localNormal: Vec3Like, lakes: LakeCenter[]): number {
   let best = 0;
   for (const lake of lakes) {
     const ang = angularDistance(localNormal, lake.normal);
-    const reach = lake.radius * 3.2;
+    const reach = lakeShoreRadius(lake, localNormal) * 3.2;
     if (ang > reach) continue;
     const proximity = 1 - ang / reach;
     const fromLake = proximity * proximity * lake.water;

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import type { GameWorldState } from '../shared/types';
+import type { GameWorldState, LakeCenter } from '../shared/types';
 import { terrainHeightAt } from '../shared/terrain';
+import { lakeBoundaryDirection, lakeShoreFactorByAngle, lakeShoreRadius } from '../shared/lakeShape';
 
 /**
  * The planet body itself: terrain mesh + vertex-color painting, glossy ocean
@@ -216,8 +217,9 @@ export class PlanetBody {
           if (lake.water < 0.05) continue;
           const d = Math.min(1, Math.max(-1, nx * lake.normal.x + ny * lake.normal.y + nz * lake.normal.z));
           const ang = Math.acos(d);
-          if (ang < lake.radius) {
-            const t = 1 - ang / lake.radius;
+          const r = lakeShoreRadius(lake, { x: nx, y: ny, z: nz });
+          if (ang < r) {
+            const t = 1 - ang / r;
             c.lerp(new THREE.Color(0x4aa3e0), t * lake.water * 0.85);
           }
         }
@@ -243,20 +245,61 @@ export class PlanetBody {
         polygonOffset: true,
         polygonOffsetFactor: -2,
       });
-      const mesh = new THREE.Mesh(new THREE.CircleGeometry(1, 40), mat);
+      const mesh = new THREE.Mesh(this.makeLakeGeometry(), mat);
+      this.writeLakeGeometry(mesh, lakes[this.lakeMeshes.length]);
       this.group.add(mesh);
       this.lakeMeshes.push(mesh);
     }
     lakes.forEach((lake, i) => {
       const mesh = this.lakeMeshes[i];
-      const n = new THREE.Vector3(lake.normal.x, lake.normal.y, lake.normal.z).normalize();
-      const r = Math.sin(lake.radius * (0.65 + lake.water * 0.35)) * 0.95;
-      mesh.scale.setScalar(Math.max(0.001, r));
-      mesh.position.copy(n).multiplyScalar(1.02 + lake.water * 0.01);
-      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+      this.writeLakeGeometry(mesh, lake);
       const mat = mesh.material as THREE.MeshStandardMaterial;
       mat.opacity = 0.3 + lake.water * 0.45;
       mesh.visible = lake.water > 0.02;
     });
   }
+
+  /** Fan geometry: vertex 0 is the center, 1..N form the shoreline ring. */
+  private makeLakeGeometry(): THREE.BufferGeometry {
+    const segments = 48;
+    const positions = new Float32Array((segments + 1) * 3);
+    const indices: number[] = [];
+    for (let i = 0; i < segments; i++) {
+      indices.push(0, 1 + i, 1 + ((i + 1) % segments));
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    return geo;
+  }
+
+  /**
+   * Lay the water surface onto the terrain as a thin draped layer, so there is
+   * no gap over low ground and surface plants sit above the waterline.
+   * Shoreline follows the shared (non-circular) lake shape.
+   */
+  private writeLakeGeometry(mesh: THREE.Mesh, lake: LakeCenter): void {
+    const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const segments = pos.count - 1;
+    const areaScale = (0.65 + lake.water * 0.35) * 0.95;
+    const depth = 0.004 + lake.water * 0.008;
+
+    const n = lake.normal;
+    let r = 1 + terrainHeightAt(n.x, n.y, n.z) + depth;
+    pos.setXYZ(0, n.x * r, n.y * r, n.z * r);
+
+    for (let i = 0; i < segments; i++) {
+      const theta = (i / segments) * Math.PI * 2;
+      const a = lake.radius * lakeShoreFactorByAngle(lake, theta) * areaScale;
+      const d = lakeBoundaryDirection(lake, theta, a, this.tmpLakeDir);
+      r = 1 + terrainHeightAt(d.x, d.y, d.z) + depth;
+      pos.setXYZ(i + 1, d.x * r, d.y * r, d.z * r);
+    }
+
+    pos.needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    mesh.geometry.computeBoundingSphere();
+  }
+
+  private tmpLakeDir = new THREE.Vector3();
 }
