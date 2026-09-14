@@ -9,6 +9,11 @@ import { personalityLabel as personalityName } from '../../simulation/WorldSimul
 import { EVENT_DEFS } from '../../simulation/events/eventCards';
 import { isNarrowViewport, watchDevice } from '../../shared/device';
 import { audioBus } from '../../game/audio';
+import { useTutorial } from '../composables/useTutorial';
+import { useReplay } from '../composables/useReplay';
+import EventCard from './EventCard.vue';
+import ReplayOverlay from './ReplayOverlay.vue';
+import TutorialCard from './TutorialCard.vue';
 
 import type { SelectionPanel } from '../stores/gameStore';
 
@@ -45,86 +50,13 @@ const musicVol = ref(0.55);
 const muted = ref(false);
 
 // --- Newbie tutorial ---
-const TUTORIAL_KEY = 'orbloom:tutorialDone';
-const tutorialDone = ref(true);
-const tutorialStep = ref(0);
-let basePlantCount = 0;
-let rotTravel = 0;
-let lastRotY = 0;
-let sawDaylight = false;
-
-const tutorialTexts = [
-  '按住画面拖动，转动星球（惯性会带着它继续转）',
-  '在左侧选择「种草」，点击星球表面种下一丛',
-  '继续转动，让草地进入阳光下',
-  '稍等片刻，看兔子是否跑来吃草',
-  '很好！你已经会照料这颗星球了',
-];
-
-function initTutorial(isContinue: boolean) {
-  if (isContinue || localStorage.getItem(TUTORIAL_KEY)) {
-    tutorialDone.value = true;
-    return;
-  }
-  tutorialDone.value = false;
-  tutorialStep.value = 0;
-  basePlantCount = store.stats.plantCount;
-  peakPlantCount = basePlantCount;
-  rotTravel = 0;
-  lastRotY = 0;
-  sawDaylight = false;
-  stepStartedAt = performance.now();
-}
-
-function skipTutorial() {
-  tutorialDone.value = true;
-  localStorage.setItem(TUTORIAL_KEY, '1');
-}
-
-function advanceTutorial(from: number) {
-  if (tutorialDone.value || tutorialStep.value !== from) return;
-  tutorialStep.value = from + 1;
-  // Reset per-step trackers so the next step cannot complete on leftover state
-  rotTravel = 0;
-  sawDaylight = false;
-  stepStartedAt = performance.now();
-  if (tutorialStep.value >= 4) {
-    window.setTimeout(() => skipTutorial(), 2800);
-  }
-}
-
-let stepStartedAt = 0;
-let peakPlantCount = 0;
-
-function tickTutorial(worldRotY: number, plantCount: number) {
-  if (tutorialDone.value) return;
-
-  const dRot = Math.abs(worldRotY - lastRotY);
-  if (dRot < Math.PI) rotTravel += dRot;
-  lastRotY = worldRotY;
-  if (plantCount > peakPlantCount) peakPlantCount = plantCount;
-
-  const step = tutorialStep.value;
-  if (step === 0) {
-    if (rotTravel > 0.45) advanceTutorial(0);
-    return;
-  }
-  if (step === 1) {
-    if (plantCount > basePlantCount) advanceTutorial(1);
-    return;
-  }
-  if (step === 2) {
-    if (store.hoverLight > 0.45) sawDaylight = true;
-    // Need a bit of rotation AFTER entering this step, plus seeing daylight
-    if (sawDaylight && rotTravel > 0.25) advanceTutorial(2);
-    return;
-  }
-  if (step === 3) {
-    const grazed = plantCount < peakPlantCount;
-    const elapsed = (performance.now() - stepStartedAt) / 1000;
-    if (grazed || elapsed > 28 || store.stats.day > 1) advanceTutorial(3);
-  }
-}
+const {
+  done: tutorialDone,
+  step: tutorialStep,
+  init: initTutorial,
+  skip: skipTutorial,
+  tick: tickTutorial,
+} = useTutorial();
 
 function loadAudioPrefs() {
   try {
@@ -289,37 +221,11 @@ const logFilters = [
   { id: 'personality' as const, label: '性情' },
 ];
 
-let replayTimer = 0;
-
-function startReplay() {
-  if (!store.replayMilestones.length) {
-    store.flash('还没有足够的故事可回放');
-    return;
-  }
-  store.replayOpen = true;
-  store.replayIndex = 0;
-  window.clearInterval(replayTimer);
-  replayTimer = window.setInterval(() => {
-    if (!store.replayOpen) {
-      window.clearInterval(replayTimer);
-      return;
-    }
-    if (store.replayIndex < store.replayMilestones.length - 1) {
-      store.replayIndex += 1;
-    } else {
-      window.clearInterval(replayTimer);
-    }
-  }, 2800);
-}
-
-function stopReplay() {
-  store.replayOpen = false;
-  window.clearInterval(replayTimer);
-}
+const { start: startReplay, stop: stopReplay, dispose: disposeReplay } = useReplay();
 
 onBeforeUnmount(() => {
   stopDeviceWatch?.();
-  window.clearInterval(replayTimer);
+  disposeReplay();
   game?.dispose();
   game = null;
 });
@@ -656,50 +562,15 @@ async function manualSave() {
       </div>
     </transition>
 
-    <transition name="fade">
-      <div v-if="store.replayOpen" class="replay-overlay" @click.self="stopReplay">
-        <div class="replay-card">
-          <div class="replay-kicker">繁荣回放</div>
-          <p class="replay-text">
-            {{ store.replayMilestones[store.replayIndex]?.text }}
-          </p>
-          <div class="replay-dots">
-            <span
-              v-for="(m, i) in store.replayMilestones"
-              :key="m.id"
-              :class="{ on: i === store.replayIndex }"
-            />
-          </div>
-          <button class="tool-btn" @click="stopReplay">结束回放</button>
-        </div>
-      </div>
-    </transition>
+    <ReplayOverlay @stop="stopReplay" />
 
-    <transition name="fade">
-      <div v-if="store.pendingEvent" class="event-overlay">
-        <div class="event-card">
-          <div class="event-kicker">星球事件</div>
-          <h2>{{ store.pendingEvent.title }}</h2>
-          <p>{{ store.pendingEvent.body }}</p>
-          <div class="event-actions">
-            <button class="event-btn primary" @click="resolveEvent(true)">
-              {{ store.pendingEvent.acceptLabel }}
-            </button>
-            <button class="event-btn" @click="resolveEvent(false)">
-              {{ store.pendingEvent.declineLabel }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </transition>
+    <EventCard @resolve="resolveEvent" />
 
-    <transition name="fade">
-      <div v-if="!tutorialDone && !bootReady" class="tutorial-card">
-        <div class="tutorial-step">引导 {{ Math.min(tutorialStep + 1, 4) }}/4</div>
-        <p>{{ tutorialTexts[Math.min(tutorialStep, 4)] }}</p>
-        <button class="tutorial-skip" @click="skipTutorial">跳过</button>
-      </div>
-    </transition>
+    <TutorialCard
+      :visible="!tutorialDone && !bootReady"
+      :step="tutorialStep"
+      @skip="skipTutorial"
+    />
 
     <transition name="fade">
       <div v-if="store.notice" class="notice">{{ store.notice }}</div>
@@ -1173,52 +1044,6 @@ async function manualSave() {
   margin-top: 6px;
   justify-content: center;
 }
-.replay-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 12;
-  display: grid;
-  place-items: center;
-  background: rgba(4, 8, 18, 0.72);
-  backdrop-filter: blur(6px);
-}
-.replay-card {
-  width: min(400px, calc(100% - 36px));
-  padding: 28px 24px 20px;
-  border-radius: 18px;
-  background: rgba(12, 20, 40, 0.94);
-  border: 1px solid rgba(180, 200, 240, 0.28);
-  text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-.replay-kicker {
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  opacity: 0.55;
-  margin-bottom: 12px;
-}
-.replay-text {
-  margin: 0 0 18px;
-  font-size: 16px;
-  line-height: 1.6;
-  min-height: 3.2em;
-}
-.replay-dots {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-.replay-dots span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-}
-.replay-dots span.on {
-  background: #9be38a;
-  box-shadow: 0 0 8px #9be38a;
-}
 .log li[data-kind='event'] {
   border-left-color: #f0d78c;
 }
@@ -1257,102 +1082,6 @@ async function manualSave() {
   padding: 10px 18px;
   border-radius: 999px;
   font-size: 13px;
-}
-
-.tutorial-card {
-  position: absolute;
-  bottom: 72px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 7;
-  width: min(360px, calc(100% - 40px));
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: rgba(14, 24, 44, 0.92);
-  border: 1px solid rgba(150, 210, 180, 0.35);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-  text-align: center;
-}
-.tutorial-step {
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  opacity: 0.55;
-  margin-bottom: 4px;
-}
-.tutorial-card p {
-  margin: 0 0 8px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.tutorial-skip {
-  border: none;
-  background: transparent;
-  color: rgba(200, 220, 255, 0.55);
-  font-size: 12px;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.event-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-  display: grid;
-  place-items: center;
-  background: rgba(5, 8, 20, 0.45);
-  pointer-events: none;
-}
-
-.event-card {
-  pointer-events: auto;
-  width: min(340px, calc(100% - 32px));
-  padding: 20px 18px 16px;
-  border-radius: 16px;
-  background: rgba(14, 22, 42, 0.94);
-  border: 1px solid rgba(180, 200, 240, 0.28);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-  text-align: center;
-}
-
-.event-kicker {
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  opacity: 0.55;
-  margin-bottom: 6px;
-}
-
-.event-card h2 {
-  margin: 0 0 8px;
-  font-size: 18px;
-  font-weight: 650;
-}
-
-.event-card p {
-  margin: 0 0 14px;
-  font-size: 13px;
-  line-height: 1.55;
-  opacity: 0.8;
-}
-
-.event-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.event-btn {
-  flex: 1;
-  border: 1px solid rgba(160, 190, 230, 0.22);
-  background: rgba(255, 255, 255, 0.05);
-  color: #e8eefc;
-  border-radius: 10px;
-  padding: 10px 8px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.event-btn.primary {
-  background: linear-gradient(135deg, #3d8fd1, #4caf82);
-  border-color: transparent;
-  font-weight: 600;
 }
 
 .fade-enter-active,
@@ -1467,10 +1196,6 @@ async function manualSave() {
     width: min(220px, calc(100% - 16px));
   }
 
-  .tutorial-card {
-    bottom: 88px;
-  }
-
   .selection-panel {
     left: 8px;
     right: 8px;
@@ -1482,10 +1207,6 @@ async function manualSave() {
     bottom: 96px;
     font-size: 12px;
     max-width: calc(100% - 24px);
-  }
-
-  .event-card {
-    padding: 16px 14px 12px;
   }
 
   .boot-card {
