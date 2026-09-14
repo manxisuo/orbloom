@@ -37,6 +37,8 @@ export const useGameStore = defineStore('game', () => {
   const hoverLabel = ref('');
   const notice = ref('');
   const pendingEvent = ref<PendingEvent | null>(null);
+  /** Game-seconds until the rain action is available again (0 = ready). */
+  const rainCooldown = ref(0);
   const personality = ref('wild');
   const selection = ref<SelectionPanel>({ kind: 'none', title: '', rows: [] });
   /** False until the first playable world is live — UI shows "-" placeholders. */
@@ -88,6 +90,7 @@ export const useGameStore = defineStore('game', () => {
     pendingEvent?: PendingEvent | null;
     personality?: string;
     selection?: SelectionPanel;
+    rainCooldown?: number;
   }) {
     stardust.value = payload.stardust;
     speed.value = payload.speed;
@@ -99,6 +102,7 @@ export const useGameStore = defineStore('game', () => {
     if (payload.pendingEvent !== undefined) pendingEvent.value = payload.pendingEvent;
     if (payload.personality) personality.value = payload.personality;
     if (payload.selection) selection.value = payload.selection;
+    if (payload.rainCooldown !== undefined) rainCooldown.value = payload.rainCooldown;
   }
 
   function setTool(t: ToolMode) {
@@ -132,6 +136,7 @@ export const useGameStore = defineStore('game', () => {
     hoverLabel,
     notice,
     pendingEvent,
+    rainCooldown,
     personality,
     selection,
     worldReady,

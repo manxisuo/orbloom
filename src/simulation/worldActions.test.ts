@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlantState, Vec3Like } from '../shared/types';
 import { normalize, v3 } from '../shared/math';
 import {
+  createBudget,
   createWorld,
   plantTreeAt,
   rain,
@@ -9,6 +10,7 @@ import {
   spawnFoxAt,
   spawnRabbitAt,
   tickDelayedEvents,
+  tickWorld,
   updatePersonality,
 } from './WorldSimulation';
 import { findEventDef, toPending } from './events/eventCards';
@@ -56,17 +58,46 @@ describe('resource spending actions', () => {
     expect(plantTreeAt(world, v3(0, 1, 0))).toEqual({ ok: false, reason: 'dense' });
   });
 
-  it('rain deducts a fixed cost and refills lakes; fails when broke', () => {
+  it('rain deducts a fixed cost and refills lakes', () => {
     const world = createWorld(1);
     const before = world.planet.lakes[0].water;
     world.resources.stardust = 10;
-    expect(rain(world)).toBe(true);
+    expect(rain(world)).toEqual({ ok: true });
     expect(world.resources.stardust).toBe(4);
     expect(world.planet.lakes[0].water).toBeGreaterThan(before);
+    expect(world.rainCooldown).toBeGreaterThan(0);
+  });
 
+  it('rain fails when stardust is short', () => {
+    const world = createWorld(1);
     world.resources.stardust = 5;
-    expect(rain(world)).toBe(false);
+    expect(rain(world)).toEqual({ ok: false, reason: 'stardust' });
     expect(world.resources.stardust).toBe(5);
+  });
+
+  it('rain is blocked by its cooldown without side effects', () => {
+    const world = createWorld(1);
+    world.resources.stardust = 100;
+    expect(rain(world).ok).toBe(true);
+    const stardust = world.resources.stardust;
+    const water = world.planet.lakes[0].water;
+    expect(rain(world)).toEqual({ ok: false, reason: 'cooldown' });
+    expect(world.resources.stardust).toBe(stardust);
+    expect(world.planet.lakes[0].water).toBe(water);
+  });
+
+  it('rain cooldown advances with game time and then clears', () => {
+    const world = createWorld(1);
+    world.resources.stardust = 100;
+    expect(rain(world).ok).toBe(true);
+    const budget = createBudget();
+    // 0.5s of game time: still cooling
+    for (let i = 0; i < 30; i++) tickWorld(world, budget, 1 / 60);
+    expect(rain(world)).toEqual({ ok: false, reason: 'cooldown' });
+    // 20s: cooldown has elapsed
+    for (let i = 0; i < 60 * 20; i++) tickWorld(world, budget, 1 / 60);
+    expect(world.rainCooldown).toBe(0);
+    expect(rain(world).ok).toBe(true);
   });
 
   it('spawning animals deducts their cost', () => {

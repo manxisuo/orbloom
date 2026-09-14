@@ -15,6 +15,7 @@ import {
   resolvePendingEvent,
   spawnFoxAt,
   spawnRabbitAt,
+  type RainResult,
 } from '../simulation/WorldSimulation';
 import { findEventDef, toPending } from '../simulation/events/eventCards';
 import { ThreeRenderer } from '../rendering/ThreeRenderer';
@@ -188,10 +189,10 @@ export class Game {
     this.tool = tool;
   }
 
-  doRain(): boolean {
-    const ok = rain(this.world);
-    if (ok) audioBus.rain();
-    return ok;
+  doRain(): RainResult {
+    const result = rain(this.world);
+    if (result.ok) audioBus.rain();
+    return result;
   }
 
   private checkDayNightChime(): void {
@@ -310,14 +311,6 @@ export class Game {
 
   private handleClick(hit: ReturnType<ThreeRenderer['pick']>): void {
     if (!hit) return;
-
-    if (this.tool === 'rain') {
-      if (rain(this.world)) {
-        audioBus.rain();
-        this.notify('降下一场小雨');
-      }
-      return;
-    }
 
     // Planting uses surface raycast so clicking existing grass doesn't swallow the action
     if (

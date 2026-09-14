@@ -25,3 +25,9 @@ dev.err
 *.njsproj
 *.sln
 *.sw?
+
+# Local agent tooling / reference docs — temporary, not committed while under review
+docs/
+.opencode/
+AGENTS.md
+opencode.jsonc

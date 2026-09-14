@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useGameStore } from '../stores/gameStore';
 import type { ToolMode } from '../../shared/types';
+import { RAIN_COST } from '../../simulation/actions';
 
 const store = useGameStore();
 const emit = defineEmits<{ pick: [tool: ToolMode]; rain: [] }>();
@@ -12,7 +13,6 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
   { id: 'plant-mushroom', label: '种菇', hint: '夜间生长并发光', cost: 4 },
   { id: 'spawn-rabbit', label: '引兔', hint: '让一只兔子来到这里', cost: 8 },
   { id: 'spawn-fox', label: '引狐', hint: '狐狸会捕食兔子', cost: 10 },
-  { id: 'rain', label: '降雨', hint: '滋润湖泊（点星球任意处）', cost: 6 },
   { id: 'inspect', label: '观察', hint: '只查看，不建造' },
 ];
 </script>
@@ -32,7 +32,15 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
         <span class="tool-label">{{ t.label }}</span>
         <span v-if="t.cost" class="tool-cost">{{ t.cost }}</span>
       </button>
-      <button class="tool-btn rain-btn" @click="emit('rain')">降雨</button>
+      <button
+        class="tool-btn rain-btn"
+        :disabled="store.rainCooldown > 0"
+        :title="`滋润湖泊，消耗 ${RAIN_COST} 星尘`"
+        @click="emit('rain')"
+      >
+        <span>{{ store.rainCooldown > 0 ? `冷却 ${Math.ceil(store.rainCooldown)}s` : '降雨' }}</span>
+        <span class="tool-cost rain-cost"><span class="cost-dot" />{{ RAIN_COST }}</span>
+      </button>
     </div>
     <p class="hint desktop-hint">
       拖动甩动星球（带惯性）<br />滚轮缩放<br />点击表面执行工具<br />每 45 秒自动存档
@@ -97,6 +105,23 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
 .rain-btn {
   margin-top: 4px;
   justify-content: center;
+  gap: 8px;
+}
+.rain-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.rain-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cost-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f0d78c;
+  box-shadow: 0 0 6px #f0d78c;
 }
 .hint {
   margin-top: 10px;

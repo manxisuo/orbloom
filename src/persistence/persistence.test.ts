@@ -51,6 +51,15 @@ describe('SaveRepository (memory adapter)', () => {
     expect(after.map((m) => m.id)).toEqual(['slot-a']);
   });
 
+  it('round-trips the rain cooldown', async () => {
+    const repo = memoryRepo();
+    const world = createWorld(1);
+    world.rainCooldown = 7.5;
+    await repo.saveWorld(world, 'autosave');
+    const loaded = await repo.loadSave('autosave');
+    expect(loaded!.world.rainCooldown).toBe(7.5);
+  });
+
   it('rejects newer schema versions', async () => {
     const repo = memoryRepo();
     const world = createWorld(3);
@@ -96,5 +105,14 @@ describe('migrateSave', () => {
   it('throws on non-object', () => {
     expect(() => migrateSave(null)).toThrow();
     expect(() => migrateSave('nope')).toThrow();
+  });
+
+  it('migrates v2 saves and defaults the rain cooldown', () => {
+    const world = createWorld(1);
+    const save = worldToSave(world);
+    const v2 = { ...save, schemaVersion: 2, world: { ...save.world, rainCooldown: undefined } };
+    const migrated = migrateSave(v2);
+    expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(migrated.world.rainCooldown).toBe(0);
   });
 });

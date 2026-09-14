@@ -153,8 +153,7 @@ export type ToolMode =
   | 'plant-flower'
   | 'plant-mushroom'
   | 'spawn-rabbit'
-  | 'spawn-fox'
-  | 'rain';
+  | 'spawn-fox';
 
 export interface GameWorldState {
   planet: PlanetState;
@@ -167,6 +166,8 @@ export interface GameWorldState {
   seed: number;
   /** Threaded PRNG state; persisted so a seed + same actions replays identically. */
   rngState: number;
+  /** Game seconds until rain is available again (0 = ready). */
+  rainCooldown: number;
   modifiers: WorldModifiers;
   pendingEvent: PendingEvent | null;
   /** Game seconds until next event offer */

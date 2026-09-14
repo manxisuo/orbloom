@@ -1,7 +1,7 @@
 import type { GameWorldState } from '../shared/types';
 
 /** Current on-disk schema. Bump when SaveGame shape changes. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export interface SaveMeta {
   id: string;

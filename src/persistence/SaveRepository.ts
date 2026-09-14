@@ -116,6 +116,7 @@ export class SaveRepository {
     if (!Array.isArray(world.delayedEvents)) world.delayedEvents = [];
     if (!world.personality) world.personality = 'wild';
     if (typeof world.rngState !== 'number') world.rngState = (world.seed ?? 42) >>> 0;
+    if (typeof world.rainCooldown !== 'number') world.rainCooldown = 0;
     if (!world.modifiers) world.modifiers = { droughtDays: 0, coldDays: 0, machineScore: 0 };
     if (typeof world.modifiers.machineScore !== 'number') world.modifiers.machineScore = 0;
     for (const e of world.log) {

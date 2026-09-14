@@ -122,6 +122,7 @@ onMounted(async () => {
       pendingEvent: world.pendingEvent,
       personality: world.personality,
       selection: buildSelectionPanel(selection),
+      rainCooldown: world.rainCooldown,
     });
     tickTutorial(world.planet.rotationY, world.stats.plantCount);
   }, {
@@ -236,7 +237,10 @@ function pickTool(t: ToolMode) {
 }
 
 function castRain() {
-  if (game?.doRain()) store.flash('降下一场小雨');
+  const result = game?.doRain();
+  if (!result) return;
+  if (result.ok) store.flash('降下一场小雨');
+  else if (result.reason === 'cooldown') store.flash('湖泊还未平复，请稍候');
   else store.flash('星尘不足（降雨需 6）');
 }
 

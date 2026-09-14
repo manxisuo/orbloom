@@ -9,6 +9,14 @@ import { rainLakes } from './ecology/water';
 
 export type PlantFailReason = 'stardust' | 'cap' | 'dense' | 'water';
 
+/** Rain is a limited player action: it costs stardust and has a cooldown. */
+export const RAIN_COST = 6;
+/** Game-seconds the rain action is unavailable after a successful use. */
+export const RAIN_COOLDOWN = 12;
+
+export type RainFailReason = 'stardust' | 'cooldown';
+export type RainResult = { ok: true } | { ok: false; reason: RainFailReason };
+
 export function makePlant(species: PlantSpecies, normal: Vec3Like, growth: number): PlantState {
   const n = normalize(v3(), normal);
   return {
@@ -81,12 +89,13 @@ export function spawnFoxAt(world: GameWorldState, localNormal: Vec3Like): boolea
   return true;
 }
 
-export function rain(world: GameWorldState): boolean {
-  const cost = 6;
-  if (world.resources.stardust < cost) return false;
-  world.resources.stardust -= cost;
+export function rain(world: GameWorldState): RainResult {
+  if (world.rainCooldown > 0) return { ok: false, reason: 'cooldown' };
+  if (world.resources.stardust < RAIN_COST) return { ok: false, reason: 'stardust' };
+  world.resources.stardust -= RAIN_COST;
   rainLakes(world.planet.lakes, 0.18);
+  world.rainCooldown = RAIN_COOLDOWN;
   pushLog(world, '一场小雨落下，湖泊丰盈了一些。', 'weather');
   refreshStats(world);
-  return true;
+  return { ok: true };
 }

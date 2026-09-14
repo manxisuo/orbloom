@@ -73,6 +73,7 @@ export function createWorld(seed = 42): GameWorldState {
     ],
     seed,
     rngState: seed >>> 0,
+    rainCooldown: 0,
     modifiers: { droughtDays: 0, coldDays: 0, machineScore: 0 },
     pendingEvent: null,
     nextEventIn: 40,
@@ -104,6 +105,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
   }
   const dt = dtReal * speed;
   world.time.gameTime += dt;
+  if (world.rainCooldown > 0) world.rainCooldown = Math.max(0, world.rainCooldown - dt);
   const rng = worldRng(world);
 
   // Integrate spin with damping — drag sets velocity, release coasts
@@ -248,6 +250,6 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
 export { computeStats, refreshStats } from './stats';
 export { pushLog } from './log';
 export { makePlantForEvent, plantTreeAt, spawnFoxAt, spawnRabbitAt, rain } from './actions';
-export type { PlantFailReason } from './actions';
+export type { PlantFailReason, RainFailReason, RainResult } from './actions';
 export { resolvePendingEvent, tickDelayedEvents } from './systems/events';
 export { personalityLabel, updatePersonality } from './systems/personality';
