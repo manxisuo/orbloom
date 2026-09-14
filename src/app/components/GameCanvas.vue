@@ -20,7 +20,11 @@ const personalityLabel = computed(() =>
 );
 
 const showSettings = ref(false);
-const showStats = ref(false);
+// Desktop opens the eco/log panel by default; narrow screens start collapsed.
+const statsCollapsedByDefault =
+  typeof window !== 'undefined' &&
+  window.matchMedia('(max-width: 720px), (max-height: 500px)').matches;
+const showStats = ref(!statsCollapsedByDefault);
 const qualityOptions = [
   { id: 'low' as const, label: '低' },
   { id: 'medium' as const, label: '中' },
@@ -1071,6 +1075,10 @@ async function manualSave() {
   right: 14px;
   width: 220px;
   padding: 12px 14px;
+  display: none;
+}
+.stats-panel.stats-open {
+  display: block;
 }
 
 .stat-row {
