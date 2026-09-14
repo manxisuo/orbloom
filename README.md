@@ -49,7 +49,7 @@ SaveRepository
 ```
 
 - 存档带 `schemaVersion` 与 `seed`，结构变更时走 `migrations.ts`
-- 自动存档：每 45 秒、页面隐藏、关闭前
+- 自动存档：每 45 秒、页面隐藏（关闭时尽力保存，不保证完成）
 - 默认槽位 `autosave`；`SaveRepository` 也支持多槽 `listSaves` / `deleteSave`
 
 ## 目录结构

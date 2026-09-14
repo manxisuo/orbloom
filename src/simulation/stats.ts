@@ -7,7 +7,6 @@ export function computeStats(
   gameTime: number,
   dayLength = 45,
 ): EcoStats {
-  let lightSum = 0;
   let waterSum = 0;
   let healthSum = 0;
   // Average "local water" proxy from plant water values + lakes
@@ -32,7 +31,6 @@ export function computeStats(
   );
 
   return {
-    averageLight: lightSum,
     averageWater: avgWater,
     averageHealth: avgHealth,
     plantCount,

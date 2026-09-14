@@ -61,6 +61,8 @@ export class Game {
   private lastDayFraction = 0;
   private hadPendingEvent = false;
   private onBeforeUnload = () => {
+    // Best-effort only: IndexedDB writes are async and may not finish on unload.
+    // visibilitychange (below) is the reliable path; this is a last-ditch attempt.
     void this.saveNow('autosave');
   };
   private onVisibility = () => {
@@ -186,8 +188,10 @@ export class Game {
     this.tool = tool;
   }
 
-  doRain(): void {
-    if (rain(this.world)) audioBus.rain();
+  doRain(): boolean {
+    const ok = rain(this.world);
+    if (ok) audioBus.rain();
+    return ok;
   }
 
   private checkDayNightChime(): void {

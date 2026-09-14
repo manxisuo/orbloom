@@ -225,8 +225,8 @@ function pickTool(t: ToolMode) {
 }
 
 function castRain() {
-  game?.doRain();
-  store.flash('降下一场小雨');
+  if (game?.doRain()) store.flash('降下一场小雨');
+  else store.flash('星尘不足（降雨需 6）');
 }
 
 function triggerEvent(id: EventId) {

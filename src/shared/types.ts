@@ -81,7 +81,6 @@ export interface TimeState {
 };
 
 export interface EcoStats {
-  averageLight: number;
   averageWater: number;
   averageHealth: number;
   plantCount: number;

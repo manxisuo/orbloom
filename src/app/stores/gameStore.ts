@@ -20,7 +20,6 @@ export const useGameStore = defineStore('game', () => {
   const speed = ref(1);
   const tool = ref<ToolMode>('plant-tree');
   const stats = ref<EcoStats>({
-    averageLight: 0,
     averageWater: 0,
     averageHealth: 0,
     plantCount: 0,
