@@ -187,6 +187,20 @@ export class Game {
 
   setTool(tool: ToolMode): void {
     this.tool = tool;
+    // Drop a stale hover reticle when the tool no longer targets the surface.
+    if (!this.toolNeedsSurfaceTarget()) this.renderer.setHoverMarker(null);
+  }
+
+  /** Tools whose click lands on the surface and benefit from a reticle. */
+  private toolNeedsSurfaceTarget(): boolean {
+    return (
+      this.tool === 'plant-tree' ||
+      this.tool === 'plant-grass' ||
+      this.tool === 'plant-flower' ||
+      this.tool === 'plant-mushroom' ||
+      this.tool === 'spawn-rabbit' ||
+      this.tool === 'spawn-fox'
+    );
   }
 
   doRain(): RainResult {
@@ -302,7 +316,7 @@ export class Game {
         water: hit.water,
         localNormal: { x: hit.localNormal.x, y: hit.localNormal.y, z: hit.localNormal.z },
       };
-      this.renderer.setHoverMarker(hit.point);
+      this.renderer.setHoverMarker(this.toolNeedsSurfaceTarget() ? hit.point : null);
       return;
     }
     this.hover = { kind: 'none' };
