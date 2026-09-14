@@ -1,6 +1,6 @@
 import type { EventId, GameWorldState, PendingEvent, Vec3Like } from '../../shared/types';
 import { nextId, normalize, randomOnSphere, v3 } from '../../shared/math';
-import { makePlantForEvent } from '../WorldSimulation';
+import { makePlantForEvent } from '../actions';
 
 export interface EventApplyResult {
   message: string;
