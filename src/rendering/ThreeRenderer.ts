@@ -5,6 +5,7 @@ import type { AnimalState, EventId, GameWorldState, PlantState, Vec3Like } from 
 import { lightAmount, SUN_DIRECTION } from '../simulation/climate/light';
 import { waterAt } from '../simulation/ecology/water';
 import { terrainHeightAt } from '../shared/terrain';
+import { isMobileExperience } from '../shared/device';
 import { EventVfx } from './EventVfx';
 
 export type PickResult =
@@ -217,9 +218,7 @@ export class ThreeRenderer {
   }
 
   private defaultQuality(): 'low' | 'medium' | 'high' {
-    const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
-    const small = Math.min(window.innerWidth, window.innerHeight) < 720;
-    return coarse || small ? 'medium' : 'high';
+    return isMobileExperience() ? 'medium' : 'high';
   }
 
   setQuality(level: 'low' | 'medium' | 'high'): void {

@@ -7,6 +7,7 @@ import { createSaveRepository } from '../../persistence';
 import type { SaveMeta } from '../../persistence/types';
 import { personalityLabel as personalityName } from '../../simulation/WorldSimulation';
 import { EVENT_DEFS } from '../../simulation/events/eventCards';
+import { isNarrowViewport, watchDevice } from '../../shared/device';
 import { audioBus } from '../../game/audio';
 
 import type { SelectionPanel } from '../stores/gameStore';
@@ -21,10 +22,18 @@ const personalityLabel = computed(() =>
 
 const showSettings = ref(false);
 // Desktop opens the eco/log panel by default; narrow screens start collapsed.
-const statsCollapsedByDefault =
-  typeof window !== 'undefined' &&
-  window.matchMedia('(max-width: 720px), (max-height: 500px)').matches;
-const showStats = ref(!statsCollapsedByDefault);
+const showStats = ref(!isNarrowViewport());
+let statsUserToggled = false;
+let stopDeviceWatch: (() => void) | null = null;
+
+function toggleStats() {
+  statsUserToggled = true;
+  showStats.value = !showStats.value;
+}
+function closeStats() {
+  statsUserToggled = true;
+  showStats.value = false;
+}
 const qualityOptions = [
   { id: 'low' as const, label: '低' },
   { id: 'medium' as const, label: '中' },
@@ -255,6 +264,11 @@ onMounted(async () => {
     store.setWorldReady(true);
     initTutorial(false);
   }
+
+  // Auto-fit the eco/log panel to the viewport until the player toggles it.
+  stopDeviceWatch = watchDevice(({ narrow }) => {
+    if (!statsUserToggled) showStats.value = !narrow;
+  });
 });
 
 function formatTime(ts: number): string {
@@ -304,6 +318,7 @@ function stopReplay() {
 }
 
 onBeforeUnmount(() => {
+  stopDeviceWatch?.();
   window.clearInterval(replayTimer);
   game?.dispose();
   game = null;
@@ -491,7 +506,7 @@ async function manualSave() {
       <button class="save-btn" :disabled="saving" @click="manualSave">
         {{ saving ? '存档中…' : '存档' }}
       </button>
-      <button class="save-btn" @click="showStats = !showStats">生态</button>
+      <button class="save-btn" @click="toggleStats">生态</button>
       <button class="save-btn" @click="showSettings = !showSettings">设置</button>
 
       <div class="speed-group">
@@ -626,7 +641,7 @@ async function manualSave() {
         <li v-for="e in store.filteredLog" :key="e.id" :data-kind="e.kind">{{ e.text }}</li>
       </ul>
       <button class="tool-btn replay-btn" @click="startReplay">繁荣回放</button>
-      <button class="tool-btn stats-close" @click="showStats = false">收起</button>
+      <button class="tool-btn stats-close" @click="closeStats">收起</button>
     </aside>
 
     <transition name="fade">
