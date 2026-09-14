@@ -84,7 +84,8 @@ export class ThreeRenderer {
         transparent: true,
         opacity: 0.95,
         side: THREE.DoubleSide,
-        depthTest: false,
+        // Depth-tested so the planet occludes it when the target faces away.
+        depthWrite: false,
       }),
     );
     this.selectRing.visible = false;
@@ -270,7 +271,7 @@ export class ThreeRenderer {
     const n = new THREE.Vector3(localNormal.x, localNormal.y, localNormal.z).normalize();
     const ground = terrainHeightAt(n.x, n.y, n.z);
     this.selectRing.visible = true;
-    this.selectRing.position.copy(n).multiplyScalar(1 + Math.max(altitude, ground) + 0.012);
+    this.selectRing.position.copy(n).multiplyScalar(1 + Math.max(altitude, ground) + 0.02);
     this.selectRing.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
   }
 
