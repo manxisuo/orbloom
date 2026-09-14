@@ -216,13 +216,14 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     }
 
     const droughtMul = 1 + (world.modifiers.droughtDays > 0 ? 1.6 : 0);
+    const coldMul = world.modifiers.coldDays > 0 ? 0.5 : 1;
     evaporateLakes(
       planet.lakes,
       (localN) => {
         localToWorldNormal(tmpWorld, localN, planet.rotationX, planet.rotationY);
         return lightAmount(tmpWorld, SUN_DIRECTION);
       },
-      dtLakeDays * droughtMul,
+      dtLakeDays * droughtMul * coldMul,
       plants,
     );
 

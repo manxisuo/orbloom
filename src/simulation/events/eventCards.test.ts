@@ -29,8 +29,10 @@ describe('event apply effects', () => {
     expect(cold.modifiers.coldDays).toBeGreaterThanOrEqual(2.5);
 
     const dry = createWorld(1);
+    dry.resources.stardust = 0;
     findEventDef('drought').apply(dry, mulberry32(1));
     expect(dry.modifiers.droughtDays).toBeGreaterThanOrEqual(3);
+    expect(dry.resources.stardust).toBe(12);
   });
 
   it('strangeSeed adds three plants', () => {
@@ -81,11 +83,50 @@ describe('event apply effects', () => {
     expect(result.message).toMatch(/星尘/);
   });
 
-  it('decline returns text without mutating modifiers', () => {
+  it('declining drought costs stardust and schedules a weaker return', () => {
     const world = createWorld(1);
-    const msg = findEventDef('drought').decline!(world);
-    expect(msg.length).toBeGreaterThan(0);
+    world.resources.stardust = 20;
+    const result = findEventDef('drought').decline!(world, mulberry32(1));
+    const message = typeof result === 'string' ? result : result.message;
+    expect(message).toMatch(/推迟/);
+    expect(world.resources.stardust).toBe(12);
     expect(world.modifiers.droughtDays).toBe(0);
+    expect(world.delayedEvents).toEqual([
+      { kind: 'droughtReturn', fireAt: world.time.dayLength * 1.5 },
+    ]);
+  });
+
+  it('cannot decline a bad event without enough stardust, so it still lands', () => {
+    const world = createWorld(1);
+    world.resources.stardust = 5;
+    const result = findEventDef('drought').decline!(world, mulberry32(1));
+    const message = typeof result === 'string' ? result : result.message;
+    expect(message).toMatch(/不足/);
+    expect(world.resources.stardust).toBe(5);
+    expect(world.modifiers.droughtDays).toBeGreaterThanOrEqual(3);
+  });
+
+  it('declining coldNight spends stardust and avoids the cold', () => {
+    const world = createWorld(1);
+    world.resources.stardust = 20;
+    findEventDef('coldNight').decline!(world, mulberry32(1));
+    expect(world.resources.stardust).toBe(14);
+    expect(world.modifiers.coldDays).toBe(0);
+  });
+
+  it('accepting migratingBirds grazes grass while its decline is free', () => {
+    const world = createWorld(1);
+    const grassBefore = world.plants
+      .filter((p) => p.species === 'grass')
+      .reduce((s, p) => s + p.growth, 0);
+    findEventDef('migratingBirds').apply(world, mulberry32(1));
+    const grassAfter = world.plants
+      .filter((p) => p.species === 'grass')
+      .reduce((s, p) => s + p.growth, 0);
+    expect(grassAfter).toBeLessThan(grassBefore);
+
+    const declined = findEventDef('migratingBirds').decline!(world, mulberry32(1));
+    expect(typeof declined === 'string' ? declined : declined.message).toContain('草地');
   });
 
   it('toPending copies the presentation fields', () => {

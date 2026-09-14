@@ -129,7 +129,7 @@ export interface WorldModifiers {
   machineScore: number;
 };
 
-export type DelayedEventKind = 'birdGift' | 'whisperGift';
+export type DelayedEventKind = 'birdGift' | 'whisperGift' | 'droughtReturn';
 
 export interface DelayedEvent {
   kind: DelayedEventKind;

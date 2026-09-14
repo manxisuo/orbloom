@@ -16,7 +16,7 @@ export interface EventDef {
   declineLabel: string;
   weight: number;
   apply: (world: GameWorldState, rng: () => number) => EventApplyResult;
-  decline?: (world: GameWorldState) => string;
+  decline?: (world: GameWorldState, rng: () => number) => EventApplyResult | string;
 }
 
 export const EVENT_DEFS: EventDef[] = [
@@ -58,10 +58,15 @@ export const EVENT_DEFS: EventDef[] = [
     weight: 1,
     apply(world) {
       world.modifiers.coldDays = Math.max(world.modifiers.coldDays, 2.5);
-      return { message: '寒夜降临，植物生长放缓。' };
+      return { message: '寒夜降临，植物生长放缓；寒冷也让湖水蒸发变慢。' };
     },
-    decline() {
-      return '寒流改道，星球躲过一劫。';
+    decline(world) {
+      if (world.resources.stardust < 6) {
+        world.modifiers.coldDays = Math.max(world.modifiers.coldDays, 2.5);
+        return { message: '星尘不足，无法保温，寒夜照旧到来。' };
+      }
+      world.resources.stardust -= 6;
+      return { message: '你耗星尘维持了温度，寒夜绕过了星球。' };
     },
   },
   {
@@ -72,11 +77,21 @@ export const EVENT_DEFS: EventDef[] = [
     declineLabel: '设法避开',
     weight: 1,
     apply(world) {
+      world.resources.stardust += 12;
       world.modifiers.droughtDays = Math.max(world.modifiers.droughtDays, 3);
-      return { message: '干旱季节开始，湖泊水位承压。' };
+      return { message: '干旱开始，湖水蒸发加快；晴空也送来了星尘。' };
     },
-    decline() {
-      return '一场意外的湿气缓解了干旱征兆。';
+    decline(world) {
+      if (world.resources.stardust < 8) {
+        world.modifiers.droughtDays = Math.max(world.modifiers.droughtDays, 3);
+        return { message: '星尘不足，无法遮云，干旱还是来了。' };
+      }
+      world.resources.stardust -= 8;
+      world.delayedEvents.push({
+        kind: 'droughtReturn',
+        fireAt: world.time.gameTime + world.time.dayLength * 1.5,
+      });
+      return { message: '你耗星尘推迟了干旱，但它似乎还会回来。' };
     },
   },
   {
@@ -110,17 +125,30 @@ export const EVENT_DEFS: EventDef[] = [
     acceptLabel: '收留候鸟',
     declineLabel: '婉拒',
     weight: 1,
-    apply(world) {
+    apply(world, rng) {
       world.resources.stardust += 6;
+      // Visiting birds graze nearby grass while they stay
+      let grazed = 0;
+      const grass = world.plants.filter((p) => p.species === 'grass' && p.growth > 0.1);
+      for (let i = 0; i < 6 && grass.length; i++) {
+        const idx = Math.floor(rng() * grass.length);
+        const p = grass.splice(idx, 1)[0];
+        p.growth = Math.max(0, p.growth - 0.1);
+        grazed++;
+      }
       // Birds return with gifts a few game-days later
       world.delayedEvents.push({
         kind: 'birdGift',
         fireAt: world.time.gameTime + world.time.dayLength * 2.5,
       });
-      return { message: '候鸟落脚又启程，留下几枚闪亮的羽尘。' };
+      return {
+        message: grazed
+          ? `候鸟落脚并啃食了 ${grazed} 丛草，留下几枚羽尘。`
+          : '候鸟落脚又启程，留下几枚闪亮的羽尘。',
+      };
     },
     decline() {
-      return '候鸟转向远方。';
+      return '候鸟转向远方，草地安然无恙。';
     },
   },
   {

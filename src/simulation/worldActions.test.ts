@@ -196,12 +196,22 @@ describe('resolvePendingEvent', () => {
     expect(world.planet.lakes[0].water).toBeGreaterThan(before);
   });
 
-  it('declining skips the effect but still clears the card', () => {
+  it('declining a free event clears the card without changing the world', () => {
     const world = createWorld(1);
-    world.pendingEvent = toPending(findEventDef('coldNight'));
+    const plantsBefore = world.plants.length;
+    world.pendingEvent = toPending(findEventDef('strangeSeed'));
     const result = resolvePendingEvent(world, false);
     expect(result?.accepted).toBe(false);
     expect(world.pendingEvent).toBeNull();
+    expect(world.plants.length).toBe(plantsBefore);
+  });
+
+  it('applies the decline cost through the command (coldNight)', () => {
+    const world = createWorld(1);
+    world.resources.stardust = 30;
+    world.pendingEvent = toPending(findEventDef('coldNight'));
+    resolvePendingEvent(world, false);
+    expect(world.resources.stardust).toBe(24);
     expect(world.modifiers.coldDays).toBe(0);
   });
 

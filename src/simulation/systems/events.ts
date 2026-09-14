@@ -27,7 +27,7 @@ export function resolvePendingEvent(
   const rng = worldRng(world);
   const result = accept
     ? def.apply(world, rng)
-    : { message: def.decline?.(world) ?? '事件过去了。' as string };
+    : (def.decline?.(world, rng) ?? { message: '事件过去了。' });
   const message = typeof result === 'string' ? result : result.message;
   const impact = typeof result === 'string' ? undefined : result.impact;
   world.pendingEvent = null;
@@ -74,6 +74,9 @@ export function tickDelayedEvents(world: GameWorldState): void {
         healed ? '星球的回响：树木更加葱茏，星尘轻轻洒落。' : '星球的回响：星尘轻轻洒落。',
         'event',
       );
+    } else if (ev.kind === 'droughtReturn') {
+      world.modifiers.droughtDays = Math.max(world.modifiers.droughtDays, 1);
+      pushLog(world, '推迟的干旱还是回来了，只是温和了一些。', 'weather');
     }
   }
 }
