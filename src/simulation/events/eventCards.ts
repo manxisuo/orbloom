@@ -102,6 +102,14 @@ export const EVENT_DEFS: EventDef[] = [
     declineLabel: '丢掉',
     weight: 1.2,
     apply(world, rng) {
+      if (world.plants.length >= 400) {
+        return { message: '星球太挤了，种子无处落脚。' };
+      }
+      const cost = 2;
+      if (world.resources.stardust < cost) {
+        return { message: '星尘不足，无法培育这批种子。' };
+      }
+      world.resources.stardust -= cost;
       const n = randomOnSphere(v3(), rng);
       const species = rng() < 0.45 ? 'flower' : 'grass';
       for (let i = 0; i < 3; i++) {
@@ -186,6 +194,11 @@ export const EVENT_DEFS: EventDef[] = [
     declineLabel: '下次吧',
     weight: 1.1,
     apply(world, rng) {
+      const cost = 4;
+      if (world.resources.stardust < cost) {
+        return { message: '星尘不足，无法为它种下树苗。' };
+      }
+      world.resources.stardust -= cost;
       const n = randomOnSphere(v3(), rng);
       for (let i = 0; i < 3; i++) {
         const jitter = randomOnSphere(v3(), rng);
@@ -199,7 +212,6 @@ export const EVENT_DEFS: EventDef[] = [
         );
         world.plants.push(makePlantForEvent('tree', mixed, 0.15 + rng() * 0.1));
       }
-      world.resources.stardust += 5;
       world.delayedEvents.push({
         kind: 'whisperGift',
         fireAt: world.time.gameTime + world.time.dayLength * 1.8,
@@ -221,7 +233,8 @@ export const EVENT_DEFS: EventDef[] = [
       for (const lake of world.planet.lakes) {
         lake.water = Math.min(1, lake.water + 0.22);
       }
-      return { message: '细雨落下，湖面微微上涨。' };
+      world.modifiers.coldDays = Math.max(world.modifiers.coldDays, 0.5);
+      return { message: '细雨落下，湖面微涨；雨后空气转凉。' };
     },
     decline() {
       return '云从旁边飘走了。';
@@ -237,16 +250,24 @@ export const EVENT_DEFS: EventDef[] = [
     apply(world, rng) {
       const gain = 6 + Math.floor(world.stats.stability * 10);
       world.resources.stardust += gain;
-      // Slight heal on a few plants
+      // Harvesting takes a little back from the ecosystem
       for (let i = 0; i < 4 && i < world.plants.length; i++) {
         const p = world.plants[Math.floor(rng() * world.plants.length)];
-        p.health = Math.min(1, p.health + 0.12);
-        p.growth = Math.min(1, p.growth + 0.06);
+        p.health = Math.max(0, p.health - 0.08);
+        p.growth = Math.max(0, p.growth - 0.06);
       }
-      return { message: `自然回赠了 ${gain} 枚星尘。` };
+      return { message: `自然回赠了 ${gain} 枚星尘，收获也让植被付出了一点代价。` };
     },
-    decline() {
-      return '你选择把丰饶留给星球本身。';
+    decline(world, rng) {
+      // Leaving the bounty to the planet strengthens it instead
+      let healed = 0;
+      for (let i = 0; i < 4 && i < world.plants.length; i++) {
+        const p = world.plants[Math.floor(rng() * world.plants.length)];
+        p.health = Math.min(1, p.health + 0.1);
+        p.growth = Math.min(1, p.growth + 0.06);
+        healed++;
+      }
+      return { message: healed ? '你把丰饶留给星球，植被更健康了。' : '你选择把丰饶留给星球本身。' };
     },
   },
 ];
