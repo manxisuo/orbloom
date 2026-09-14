@@ -15,6 +15,13 @@ export type SelectionPanel =
     }
   | { kind: 'none'; title: string; rows: never[] };
 
+export interface WishView {
+  title: string;
+  hint: string;
+  progress: number;
+  daysLeft: number;
+}
+
 export const useGameStore = defineStore('game', () => {
   const stardust = ref(30);
   const speed = ref(1);
@@ -39,6 +46,8 @@ export const useGameStore = defineStore('game', () => {
   const pendingEvent = ref<PendingEvent | null>(null);
   /** Game-seconds until the rain action is available again (0 = ready). */
   const rainCooldown = ref(0);
+  /** Active planet wish, mapped for display. */
+  const wish = ref<WishView | null>(null);
   const personality = ref('wild');
   const selection = ref<SelectionPanel>({ kind: 'none', title: '', rows: [] });
   /** False until the first playable world is live — UI shows "-" placeholders. */
@@ -91,6 +100,7 @@ export const useGameStore = defineStore('game', () => {
     personality?: string;
     selection?: SelectionPanel;
     rainCooldown?: number;
+    wish?: WishView | null;
   }) {
     stardust.value = payload.stardust;
     speed.value = payload.speed;
@@ -103,6 +113,7 @@ export const useGameStore = defineStore('game', () => {
     if (payload.personality) personality.value = payload.personality;
     if (payload.selection) selection.value = payload.selection;
     if (payload.rainCooldown !== undefined) rainCooldown.value = payload.rainCooldown;
+    if (payload.wish !== undefined) wish.value = payload.wish;
   }
 
   function setTool(t: ToolMode) {
@@ -137,6 +148,7 @@ export const useGameStore = defineStore('game', () => {
     notice,
     pendingEvent,
     rainCooldown,
+    wish,
     personality,
     selection,
     worldReady,

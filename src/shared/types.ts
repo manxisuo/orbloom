@@ -91,7 +91,7 @@ export interface EcoStats {
   day: number;
 };
 
-export type LogKind = 'life' | 'plant' | 'animal' | 'event' | 'weather' | 'personality';
+export type LogKind = 'life' | 'plant' | 'animal' | 'event' | 'weather' | 'personality' | 'wish';
 
 export interface LogEntry {
   id: string;
@@ -146,6 +146,25 @@ export type PlanetPersonality =
   | 'mechanical'
   | 'chaos';
 
+export type WishId = 'forestWish' | 'lakeWish' | 'rabbitWish' | 'stabilityWish';
+
+/** Structured condition evaluated against the live world (no text matching). */
+export type WishCondition =
+  | { kind: 'plantSpeciesCount'; species: PlantSpecies; min: number }
+  | { kind: 'averageLakeWater'; min: number }
+  | { kind: 'animalSpeciesCount'; species: AnimalSpecies; min: number }
+  | { kind: 'stability'; min: number };
+
+export interface PlanetWish {
+  id: WishId;
+  /** Game time the wish was offered */
+  startedAt: number;
+  /** Game time it expires (fail) if unmet */
+  deadline: number;
+  /** 0..1, refreshed every eco tick for UI */
+  progress: number;
+}
+
 export type ToolMode =
   | 'inspect'
   | 'plant-tree'
@@ -174,4 +193,10 @@ export interface GameWorldState {
   nextEventIn: number;
   delayedEvents: DelayedEvent[];
   personality: PlanetPersonality;
+  /** Active planet wish, or null when none is pending */
+  wish: PlanetWish | null;
+  /** Game seconds until the next wish is offered */
+  nextWishIn: number;
+  wishesCompleted: number;
+  wishesFailed: number;
 };

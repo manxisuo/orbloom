@@ -60,6 +60,17 @@ describe('SaveRepository (memory adapter)', () => {
     expect(loaded!.world.rainCooldown).toBe(7.5);
   });
 
+  it('round-trips an active wish', async () => {
+    const repo = memoryRepo();
+    const world = createWorld(1);
+    world.wish = { id: 'lakeWish', startedAt: 3, deadline: 90, progress: 0.42 };
+    world.wishesCompleted = 2;
+    await repo.saveWorld(world, 'autosave');
+    const loaded = await repo.loadSave('autosave');
+    expect(loaded!.world.wish).toEqual({ id: 'lakeWish', startedAt: 3, deadline: 90, progress: 0.42 });
+    expect(loaded!.world.wishesCompleted).toBe(2);
+  });
+
   it('rejects newer schema versions', async () => {
     const repo = memoryRepo();
     const world = createWorld(3);
@@ -114,5 +125,22 @@ describe('migrateSave', () => {
     const migrated = migrateSave(v2);
     expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
     expect(migrated.world.rainCooldown).toBe(0);
+  });
+
+  it('migrates v3 saves and defaults wishes', () => {
+    const world = createWorld(1);
+    const save = worldToSave(world);
+    const raw = { ...save.world } as Record<string, unknown>;
+    delete raw.wish;
+    delete raw.nextWishIn;
+    delete raw.wishesCompleted;
+    delete raw.wishesFailed;
+    const v3save = { ...save, schemaVersion: 3, world: raw };
+    const migrated = migrateSave(v3save);
+    expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(migrated.world.wish).toBeNull();
+    expect(migrated.world.nextWishIn).toBe(15);
+    expect(migrated.world.wishesCompleted).toBe(0);
+    expect(migrated.world.wishesFailed).toBe(0);
   });
 });

@@ -15,6 +15,7 @@ import { makePlant } from './actions';
 import { makeRabbit, maybeRabbitLife, maybeSpawnBees, maybeSpawnFoxes } from './systems/lifecycle';
 import { maybeOfferEvent, tickDelayedEvents } from './systems/events';
 import { updatePersonality } from './systems/personality';
+import { tickWishes } from './systems/wishes';
 
 const tmpWorld = v3();
 
@@ -79,6 +80,10 @@ export function createWorld(seed = 42): GameWorldState {
     nextEventIn: 40,
     delayedEvents: [],
     personality: 'wild',
+    wish: null,
+    nextWishIn: 15,
+    wishesCompleted: 0,
+    wishesFailed: 0,
   };
 }
 
@@ -243,6 +248,9 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
         plants.splice(i, 1);
       }
     }
+
+    // Planet wishes: offer/track/resolve stage goals
+    tickWishes(world, step);
   }
 }
 
@@ -253,3 +261,4 @@ export { makePlantForEvent, plantTreeAt, spawnFoxAt, spawnRabbitAt, rain } from 
 export type { PlantFailReason, RainFailReason, RainResult } from './actions';
 export { resolvePendingEvent, tickDelayedEvents } from './systems/events';
 export { personalityLabel, updatePersonality } from './systems/personality';
+export { wishLabel } from './systems/wishes';

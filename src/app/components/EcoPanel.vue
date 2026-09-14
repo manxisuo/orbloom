@@ -13,6 +13,7 @@ const logFilters = [
   { id: 'event' as const, label: '事件' },
   { id: 'weather' as const, label: '天候' },
   { id: 'personality' as const, label: '性情' },
+  { id: 'wish' as const, label: '愿望' },
 ];
 </script>
 
@@ -188,6 +189,9 @@ const logFilters = [
 }
 .log li[data-kind='animal'] {
   border-left-color: #9be38a;
+}
+.log li[data-kind='wish'] {
+  border-left-color: #8b7cf0;
 }
 .log {
   list-style: none;

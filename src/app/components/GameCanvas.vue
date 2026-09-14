@@ -5,7 +5,7 @@ import { useGameStore } from '../stores/gameStore';
 import type { ToolMode, EventId } from '../../shared/types';
 import { createSaveRepository } from '../../persistence';
 import type { SaveMeta } from '../../persistence/types';
-import { personalityLabel as personalityName } from '../../simulation/WorldSimulation';
+import { personalityLabel as personalityName, wishLabel } from '../../simulation/WorldSimulation';
 import { isNarrowViewport, isWebGLAvailable, watchDevice } from '../../shared/device';
 import { useTutorial } from '../composables/useTutorial';
 import { useReplay } from '../composables/useReplay';
@@ -18,6 +18,7 @@ import ToolPanel from './ToolPanel.vue';
 import EcoPanel from './EcoPanel.vue';
 import SettingsPanel from './SettingsPanel.vue';
 import BootOverlay from './BootOverlay.vue';
+import WishCard from './WishCard.vue';
 
 import type { SelectionPanel } from '../stores/gameStore';
 
@@ -123,6 +124,16 @@ onMounted(async () => {
       personality: world.personality,
       selection: buildSelectionPanel(selection),
       rainCooldown: world.rainCooldown,
+      wish: world.wish
+        ? {
+            ...wishLabel(world.wish.id),
+            progress: world.wish.progress,
+            daysLeft: Math.max(
+              0,
+              (world.wish.deadline - world.time.gameTime) / world.time.dayLength,
+            ),
+          }
+        : null,
     });
     tickTutorial(world.planet.rotationY, world.stats.plantCount);
   }, {
@@ -336,6 +347,8 @@ async function manualSave() {
       @toggle-settings="showSettings = !showSettings"
       @set-speed="setSpeed"
     />
+
+    <WishCard />
 
     <SettingsPanel
       :open="showSettings"

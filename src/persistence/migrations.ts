@@ -27,6 +27,11 @@ export function migrateSave(raw: unknown): SaveGame {
     version = 3;
   }
 
+  if (version === 3) {
+    data = migrateV3ToV4(data);
+    version = 4;
+  }
+
   if (version > SCHEMA_VERSION) {
     throw new Error(
       `Save schemaVersion ${version} is newer than supported ${SCHEMA_VERSION}. Please update the game.`,
@@ -74,6 +79,22 @@ function migrateV2ToV3(data: AnyRecord): AnyRecord {
       ...world,
       // Older saves predate the rain cooldown; default to "ready".
       rainCooldown: typeof world.rainCooldown === 'number' ? world.rainCooldown : 0,
+    },
+  };
+}
+
+function migrateV3ToV4(data: AnyRecord): AnyRecord {
+  const world = (data.world ?? {}) as AnyRecord;
+  return {
+    ...data,
+    schemaVersion: 4,
+    world: {
+      ...world,
+      // Older saves predate planet wishes; start with none pending.
+      wish: world.wish ?? null,
+      nextWishIn: typeof world.nextWishIn === 'number' ? world.nextWishIn : 15,
+      wishesCompleted: typeof world.wishesCompleted === 'number' ? world.wishesCompleted : 0,
+      wishesFailed: typeof world.wishesFailed === 'number' ? world.wishesFailed : 0,
     },
   };
 }
