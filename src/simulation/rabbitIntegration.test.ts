@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createBudget, createWorld, tickWorld } from './WorldSimulation';
+import { createBudget, createWorld, spawnFoxAt, spawnRabbitAt, tickWorld } from './WorldSimulation';
+import { v3 } from '../shared/math';
 
 describe('tickWorld rabbit integration', () => {
   it('starter rabbits change position over simulated time', () => {
@@ -51,5 +52,23 @@ describe('tickWorld rabbit integration', () => {
     const snapshot = (w: typeof a) =>
       w.animals.map((x) => [x.species, x.position.normal.x, x.position.normal.y, x.position.normal.z, x.hunger]);
     expect(snapshot(a)).toEqual(snapshot(b));
+  });
+
+  it('fox catches an adjacent rabbit without corrupting the animal list', () => {
+    const world = createWorld(5);
+    world.animals = [];
+    world.resources.stardust = 100;
+    const spot = v3(0, 1, 0);
+    expect(spawnRabbitAt(world, spot)).toBe(true);
+    expect(spawnFoxAt(world, spot)).toBe(true);
+    const fox = world.animals.find((a) => a.species === 'fox')!;
+    fox.hunger = 0.9;
+
+    // 0.5s: enough for the fox's first decision tick, before any eco tick
+    const budget = createBudget();
+    for (let i = 0; i < 30; i++) tickWorld(world, budget, 1 / 60);
+
+    expect(world.animals.some((a) => a.species === 'rabbit')).toBe(false);
+    expect(world.animals.some((a) => a.species === 'fox')).toBe(true);
   });
 });

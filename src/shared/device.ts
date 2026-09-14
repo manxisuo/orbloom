@@ -35,6 +35,20 @@ export function isMobileExperience(): boolean {
   return isCoarsePointer() || isNarrowViewport();
 }
 
+/** True when a WebGL context can actually be created in this browser. */
+export function isWebGLAvailable(): boolean {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return false;
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export interface DeviceState {
   narrow: boolean;
   coarse: boolean;

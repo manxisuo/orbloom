@@ -171,23 +171,28 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
   }
 
   const foxes = animals.filter((a) => a.species === 'fox');
+  // Foxes can catch prey mid-loop; defer removals so we never splice while
+  // iterating (which would skip the animal right after the victim).
+  const caught = new Set<string>();
   for (const animal of animals) {
+    if (caught.has(animal.id)) continue;
     localToWorldNormal(tmpWorld, animal.position.normal, planet.rotationX, planet.rotationY);
     const light = lightAmount(tmpWorld, SUN_DIRECTION);
     if (animal.species === 'bee') {
       updateBee(animal, plants, light, dt, doDecision, rng);
     } else if (animal.species === 'fox') {
-      const { caught } = updateFox(animal, animals.filter((r) => r.species === 'rabbit'), dt, doDecision, rng);
-      if (caught) {
-        const idx = animals.findIndex((r) => r.id === caught);
-        if (idx >= 0) {
-          animals.splice(idx, 1);
-          pushLog(world, '一只狐狸捕获了猎物。', 'animal');
-        }
-      }
+      const prey = animals.filter((r) => r.species === 'rabbit' && !caught.has(r.id));
+      const { caught: victim } = updateFox(animal, prey, dt, doDecision, rng);
+      if (victim) caught.add(victim);
     } else {
       updateRabbit(animal, plants, light, dt, doDecision ? 0 : 1, foxes, rng);
     }
+  }
+  if (caught.size) {
+    for (let i = animals.length - 1; i >= 0; i--) {
+      if (caught.has(animals[i].id)) animals.splice(i, 1);
+    }
+    for (let i = 0; i < caught.size; i++) pushLog(world, '一只狐狸捕获了猎物。', 'animal');
   }
 
   // Lakes evaporate based on sun + tree shade + drought

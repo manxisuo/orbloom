@@ -6,7 +6,7 @@ import type { ToolMode, EventId } from '../../shared/types';
 import { createSaveRepository } from '../../persistence';
 import type { SaveMeta } from '../../persistence/types';
 import { personalityLabel as personalityName } from '../../simulation/WorldSimulation';
-import { isNarrowViewport, watchDevice } from '../../shared/device';
+import { isNarrowViewport, isWebGLAvailable, watchDevice } from '../../shared/device';
 import { useTutorial } from '../composables/useTutorial';
 import { useReplay } from '../composables/useReplay';
 import { useAudioPrefs } from '../composables/useAudioPrefs';
@@ -65,11 +65,17 @@ const existingMeta = ref<SaveMeta | null>(null);
 const storageLabel = ref(repo.backendName);
 const saving = ref(false);
 const lastSavedLabel = ref('');
+const fatalError = ref('');
 
 onMounted(async () => {
   loadAudioPrefs();
   const canvas = canvasRef.value;
   if (!canvas) return;
+
+  if (!isWebGLAvailable()) {
+    fatalError.value = '当前浏览器/环境无法创建 WebGL 上下文。';
+    return;
+  }
 
   let loadedWorld: import('../../shared/types').GameWorldState | null = null;
   try {
@@ -83,7 +89,8 @@ onMounted(async () => {
     // Storage may be unavailable — still allow new game.
   }
 
-  game = new Game(canvas, (world, hover, selection) => {
+  try {
+    game = new Game(canvas, (world, hover, selection) => {
     let hoverLight = 0;
     let hoverWater = 0;
     let hoverLabel = '—';
@@ -123,6 +130,10 @@ onMounted(async () => {
     saveRepository: repo,
     onNotify: (msg) => store.flash(msg),
   });
+  } catch (err) {
+    fatalError.value = err instanceof Error ? err.message : '无法初始化 3D 渲染。';
+    return;
+  }
 
   game.setTool(store.tool);
   const savedQ = localStorage.getItem('orbloom:quality') as 'low' | 'medium' | 'high' | null;
@@ -296,6 +307,14 @@ async function manualSave() {
   <div class="game-shell">
     <canvas ref="canvasRef" class="game-canvas" />
 
+    <div v-if="fatalError" class="fatal-overlay">
+      <div class="fatal-card">
+        <h1>无法启动 3D 渲染</h1>
+        <p>{{ fatalError }}</p>
+        <p class="fatal-hint">请更新浏览器，或启用硬件加速 / WebGL 后重试。</p>
+      </div>
+    </div>
+
     <BootOverlay
       v-if="bootReady"
       :meta="existingMeta"
@@ -376,6 +395,38 @@ async function manualSave() {
 }
 .game-canvas:active {
   cursor: grabbing;
+}
+
+.fatal-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 8, 20, 0.9);
+  padding: 24px;
+}
+.fatal-card {
+  width: min(420px, 100%);
+  padding: 28px 24px;
+  border-radius: 18px;
+  background: rgba(12, 18, 36, 0.95);
+  border: 1px solid rgba(230, 150, 150, 0.35);
+  text-align: center;
+}
+.fatal-card h1 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+.fatal-card p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+.fatal-hint {
+  opacity: 0.55 !important;
+  font-size: 12px !important;
 }
 
 .hud {
