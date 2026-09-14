@@ -21,6 +21,15 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
     <div class="panel-title tool-title">值日工具</div>
     <div class="tool-scroll">
       <button
+        class="tool-btn inspect-btn"
+        :class="{ active: store.tool === 'inspect' }"
+        title="只查看，不建造"
+        @click="emit('pick', 'inspect')"
+      >
+        <span class="tool-label">观察</span>
+      </button>
+      <div class="tool-divider" />
+      <button
         v-for="t in tools"
         :key="t.id"
         class="tool-btn"
@@ -39,16 +48,6 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
       >
         <span>{{ store.rainCooldown > 0 ? `冷却 ${Math.ceil(store.rainCooldown)}s` : '降雨' }}</span>
         <span class="tool-cost rain-cost"><span class="cost-dot" />{{ RAIN_COST }}</span>
-      </button>
-      <div class="tool-divider" />
-      <button
-        class="tool-btn inspect-btn"
-        :class="{ active: store.tool === 'inspect' }"
-        title="只查看，不建造"
-        @click="emit('pick', 'inspect')"
-      >
-        <span class="tool-label">观察</span>
-        <span class="tool-tag">只读</span>
       </button>
     </div>
     <p class="hint desktop-hint">
@@ -115,13 +114,6 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
   height: 1px;
   background: rgba(160, 190, 230, 0.18);
   margin: 4px 0;
-}
-.tool-tag {
-  font-size: 10px;
-  color: #9fb4d8;
-  border: 1px solid rgba(160, 190, 230, 0.25);
-  border-radius: 999px;
-  padding: 1px 6px;
 }
 .rain-btn {
   margin-top: 4px;
