@@ -123,8 +123,10 @@ const eventDefs = EVENT_DEFS;
   opacity: 0.8;
 }
 .quality-row {
-  flex-direction: row !important;
+  display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
+  gap: 6px;
   margin-bottom: 8px;
 }
 .quality-row .tool-btn {
