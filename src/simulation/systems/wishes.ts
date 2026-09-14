@@ -6,6 +6,7 @@ import type {
 } from '../../shared/types';
 import { pushLog } from '../log';
 import { refreshStats } from '../stats';
+import { WISH_GAP_DAYS } from '../tuning';
 
 export interface WishReward {
   /** Stardust granted on completion */
@@ -23,9 +24,6 @@ export interface WishDef {
   condition: WishCondition;
   reward: WishReward;
 }
-
-/** Game seconds between a wish resolving and the next one being offered. */
-export const WISH_GAP = 30;
 
 /**
  * Wish catalog. Numeric values are deliberately simple constants so they are
@@ -129,7 +127,7 @@ function completeWish(world: GameWorldState, def: WishDef): void {
   applyReward(world, def.reward);
   world.wishesCompleted += 1;
   world.wish = null;
-  world.nextWishIn = WISH_GAP;
+  world.nextWishIn = WISH_GAP_DAYS * world.time.dayLength;
   pushLog(world, `愿望达成：${wishLabel(def.id).title}。`, 'wish');
   refreshStats(world);
 }
@@ -137,7 +135,7 @@ function completeWish(world: GameWorldState, def: WishDef): void {
 function failWish(world: GameWorldState, def: WishDef): void {
   world.wishesFailed += 1;
   world.wish = null;
-  world.nextWishIn = WISH_GAP;
+  world.nextWishIn = WISH_GAP_DAYS * world.time.dayLength;
   pushLog(world, `愿望错失：${wishLabel(def.id).title}。`, 'wish');
 }
 

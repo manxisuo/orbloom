@@ -6,13 +6,12 @@ import { makeFox, makeRabbit } from './systems/lifecycle';
 import { pushLog } from './log';
 import { refreshStats } from './stats';
 import { rainLakes } from './ecology/water';
+import { RAIN_COOLDOWN_DAYS } from './tuning';
 
 export type PlantFailReason = 'stardust' | 'cap' | 'dense' | 'water';
 
 /** Rain is a limited player action: it costs stardust and has a cooldown. */
 export const RAIN_COST = 6;
-/** Game-seconds the rain action is unavailable after a successful use. */
-export const RAIN_COOLDOWN = 12;
 
 export type RainFailReason = 'stardust' | 'cooldown';
 export type RainResult = { ok: true } | { ok: false; reason: RainFailReason };
@@ -94,7 +93,7 @@ export function rain(world: GameWorldState): RainResult {
   if (world.resources.stardust < RAIN_COST) return { ok: false, reason: 'stardust' };
   world.resources.stardust -= RAIN_COST;
   rainLakes(world.planet.lakes, 0.18);
-  world.rainCooldown = RAIN_COOLDOWN;
+  world.rainCooldown = RAIN_COOLDOWN_DAYS * world.time.dayLength;
   pushLog(world, '一场小雨落下，湖泊丰盈了一些。', 'weather');
   refreshStats(world);
   return { ok: true };

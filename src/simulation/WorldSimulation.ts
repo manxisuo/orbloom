@@ -16,6 +16,7 @@ import { makeRabbit, maybeRabbitLife, maybeSpawnBees, maybeSpawnFoxes } from './
 import { maybeOfferEvent, tickDelayedEvents } from './systems/events';
 import { updatePersonality } from './systems/personality';
 import { tickWishes } from './systems/wishes';
+import { DAY_LENGTH, EVENT_FIRST_DAYS, WISH_FIRST_DAYS } from './tuning';
 
 const tmpWorld = v3();
 
@@ -61,7 +62,7 @@ export function createWorld(seed = 42): GameWorldState {
     plants,
     animals,
     resources: { stardust: 30 },
-    time: { gameTime: 0, speed: 1, dayLength: 45 },
+    time: { gameTime: 0, speed: 1, dayLength: DAY_LENGTH },
     stats: computeStats(plants, animals, lakes, 0),
     log: [
       {
@@ -77,11 +78,11 @@ export function createWorld(seed = 42): GameWorldState {
     rainCooldown: 0,
     modifiers: { droughtDays: 0, coldDays: 0, machineScore: 0 },
     pendingEvent: null,
-    nextEventIn: 40,
+    nextEventIn: EVENT_FIRST_DAYS * DAY_LENGTH,
     delayedEvents: [],
     personality: 'wild',
     wish: null,
-    nextWishIn: 15,
+    nextWishIn: WISH_FIRST_DAYS * DAY_LENGTH,
     wishesCompleted: 0,
     wishesFailed: 0,
   };

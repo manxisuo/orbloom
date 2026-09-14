@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { v3 } from '../../shared/math';
 import { createWorld } from '../WorldSimulation';
 import { makePlant } from '../actions';
-import { WISH_DEFS, WISH_GAP, tickWishes, wishProgress } from './wishes';
+import { WISH_DEFS, tickWishes, wishProgress } from './wishes';
+import { WISH_GAP_DAYS } from '../tuning';
 
 function addTrees(world: ReturnType<typeof createWorld>, n: number) {
   for (let i = 0; i < n; i++) world.plants.push(makePlant('tree', v3(0, 1, 0), 0.5));
@@ -51,7 +52,7 @@ describe('tickWishes', () => {
     expect(world.wishesCompleted).toBe(1);
     expect(world.wish).toBeNull();
     expect(world.resources.stardust).toBe(20);
-    expect(world.nextWishIn).toBe(WISH_GAP);
+    expect(world.nextWishIn).toBeCloseTo(WISH_GAP_DAYS * world.time.dayLength);
   });
 
   it('fails an unmet wish at its deadline without side effects', () => {
@@ -74,7 +75,8 @@ describe('tickWishes', () => {
     world.wish = { id: 'forestWish', startedAt: 0, deadline: 1e9, progress: 0 };
     tickWishes(world, 1);
     expect(world.wish).toBeNull();
-    tickWishes(world, WISH_GAP - 1);
+    const gap = WISH_GAP_DAYS * world.time.dayLength;
+    tickWishes(world, gap - 1);
     expect(world.wish).toBeNull();
     tickWishes(world, 2);
     expect(world.wish).not.toBeNull();

@@ -5,6 +5,7 @@ import { makePlantForEvent } from '../actions';
 import { pushLog } from '../log';
 import { worldRng } from '../rng';
 import { refreshStats } from '../stats';
+import { EVENT_GAP_MAX_DAYS, EVENT_GAP_MIN_DAYS } from '../tuning';
 
 /** Offer a new event card once the timer elapses. */
 export function maybeOfferEvent(world: GameWorldState, step: number, rng: () => number): void {
@@ -13,7 +14,8 @@ export function maybeOfferEvent(world: GameWorldState, step: number, rng: () => 
   if (world.nextEventIn > 0) return;
   const def = pickEvent(mulberry32(Math.floor(world.time.gameTime) + world.seed));
   world.pendingEvent = toPending(def);
-  world.nextEventIn = 55 + rng() * 40;
+  world.nextEventIn =
+    (EVENT_GAP_MIN_DAYS + rng() * (EVENT_GAP_MAX_DAYS - EVENT_GAP_MIN_DAYS)) * world.time.dayLength;
   pushLog(world, `事件：${def.title}`, 'event');
 }
 

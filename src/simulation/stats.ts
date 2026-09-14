@@ -1,11 +1,12 @@
 import type { AnimalState, EcoStats, GameWorldState, PlantState } from '../shared/types';
+import { DAY_LENGTH } from './tuning';
 
 export function computeStats(
   plants: PlantState[],
   animals: AnimalState[],
   lakes: { water: number }[],
   gameTime: number,
-  dayLength = 45,
+  dayLength = DAY_LENGTH,
 ): EcoStats {
   let waterSum = 0;
   let healthSum = 0;
