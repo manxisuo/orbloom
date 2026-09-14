@@ -306,6 +306,9 @@ export class EntityLayer {
     mesh.count = count;
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    // Invalidate the cached instance bounds so picking sees transformed/added
+    // instances (InstancedMesh.raycast otherwise early-outs on stale bounds).
+    mesh.boundingSphere = null;
   }
 
   private ensureInstanced(kind: 'grass' | 'flower'): THREE.InstancedMesh {
@@ -414,6 +417,9 @@ export class EntityLayer {
     mesh.count = count;
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    // Invalidate the cached instance bounds so picking sees transformed/added
+    // instances (InstancedMesh.raycast otherwise early-outs on stale bounds).
+    mesh.boundingSphere = null;
   }
 
   private createPlantView(plant: PlantState): PlantView {
