@@ -7,6 +7,7 @@ import { waterAt } from '../simulation/ecology/water';
 import { terrainHeightAt } from '../shared/terrain';
 import { isMobileExperience } from '../shared/device';
 import { EventVfx } from './EventVfx';
+import { Ambience } from './Ambience';
 
 export type PickResult =
   | { type: 'surface'; point: THREE.Vector3; localNormal: THREE.Vector3; light: number; water: number }
@@ -51,20 +52,13 @@ export class ThreeRenderer {
   private marker: THREE.Mesh;
   private selectRing: THREE.Mesh;
   private selectionTarget: { kind: 'plant' | 'animal'; id: string } | null = null;
-  private cloudGroup = new THREE.Group();
-  private starGroup = new THREE.Group();
-  private flockGroup = new THREE.Group();
-  private flockPhase = 0;
-  private fireflyPoints: THREE.Points | null = null;
-  private fireflyPhase = 0;
-  private machineGroup = new THREE.Group();
-  private machineSpin = 0;
   private personalityTint = new THREE.Color(0x7eb6ff);
   private lastPersonality = 'wild';
   private lastMushroomGlow = 0;
   private dayFraction = 0;
   private waterEnvMap: THREE.Texture | null = null;
   private eventVfx: EventVfx | null = null;
+  private ambience!: Ambience;
 
   private grassMesh: THREE.InstancedMesh | null = null;
   private flowerMesh: THREE.InstancedMesh | null = null;
@@ -179,8 +173,8 @@ export class ThreeRenderer {
     glow.position.copy(this.sunVisual.position);
     this.scene.add(glow);
 
-    this.buildStars();
     this.buildPlanet();
+    this.ambience = new Ambience(this.scene, this.planetGroup);
 
     this.marker = new THREE.Mesh(
       new THREE.RingGeometry(0.04, 0.06, 24),
@@ -261,81 +255,6 @@ export class ThreeRenderer {
       this.matCache.set(key, m);
     }
     return m;
-  }
-
-  private buildStars(): void {
-    // Pixel-sized, unfogged starfield (distance fog was erasing far points)
-    const layers: { count: number; rMin: number; rMax: number; size: number; color: number; opacity: number }[] = [
-      { count: 500, rMin: 22, rMax: 40, size: 1.2, color: 0xa8b8d8, opacity: 0.65 },
-      { count: 320, rMin: 24, rMax: 45, size: 1.8, color: 0xd8e4ff, opacity: 0.85 },
-      { count: 70, rMin: 22, rMax: 38, size: 2.6, color: 0xfff0d0, opacity: 0.7 },
-    ];
-
-    for (const layer of layers) {
-      const positions = new Float32Array(layer.count * 3);
-      const colors = new Float32Array(layer.count * 3);
-      const base = new THREE.Color(layer.color);
-      for (let i = 0; i < layer.count; i++) {
-        const r = layer.rMin + Math.random() * (layer.rMax - layer.rMin);
-        const theta = Math.random() * Math.PI * 2;
-        const band = (Math.random() + Math.random() + Math.random()) / 3;
-        const phi = Math.PI * 0.35 + band * Math.PI * 0.3;
-        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        positions[i * 3 + 1] = r * Math.cos(phi) * 0.55 + (Math.random() - 0.5) * 6;
-        positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-
-        const tint = 0.85 + Math.random() * 0.3;
-        colors[i * 3] = base.r * tint;
-        colors[i * 3 + 1] = base.g * tint;
-        colors[i * 3 + 2] = Math.min(1, base.b * tint * 1.05);
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      const pts = new THREE.Points(
-        geo,
-        new THREE.PointsMaterial({
-          size: layer.size,
-          sizeAttenuation: false,
-          vertexColors: true,
-          transparent: true,
-          opacity: layer.opacity,
-          depthWrite: false,
-          fog: false,
-        }),
-      );
-      pts.renderOrder = -1;
-      this.starGroup.add(pts);
-    }
-
-    // Soft dust band (also unfogged)
-    const dustCount = 180;
-    const dustPos = new Float32Array(dustCount * 3);
-    for (let i = 0; i < dustCount; i++) {
-      const r = 28 + Math.random() * 12;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.PI * 0.42 + (Math.random() - 0.5) * 0.22;
-      dustPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      dustPos[i * 3 + 1] = r * Math.cos(phi) * 0.5;
-      dustPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-    }
-    const dustGeo = new THREE.BufferGeometry();
-    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
-    const dust = new THREE.Points(
-      dustGeo,
-      new THREE.PointsMaterial({
-        color: 0x7a8ab8,
-        size: 4,
-        sizeAttenuation: false,
-        transparent: true,
-        opacity: 0.12,
-        depthWrite: false,
-        fog: false,
-      }),
-    );
-    dust.renderOrder = -1;
-    this.starGroup.add(dust);
-    this.scene.add(this.starGroup);
   }
 
   private buildPlanet(): void {
@@ -434,130 +353,8 @@ export class ThreeRenderer {
     this.atmosphere = new THREE.Mesh(atmoGeo, atmoMat);
     this.planetGroup.add(this.atmosphere);
 
-    // Clouds — soft unlit puffs so they never read as rocks on the night side
-    const cloudMat = new THREE.MeshBasicMaterial({
-      color: 0xf4f7ff,
-      transparent: true,
-      opacity: 0.28,
-      depthWrite: false,
-    });
-    for (let i = 0; i < 9; i++) {
-      const puff = new THREE.Group();
-      const lobes = 3 + Math.floor(Math.random() * 3);
-      for (let j = 0; j < lobes; j++) {
-        const lobe = new THREE.Mesh(new THREE.SphereGeometry(0.05 + Math.random() * 0.04, 8, 6), cloudMat);
-        lobe.position.set((Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.08);
-        lobe.scale.set(1.4 + Math.random() * 0.8, 0.35 + Math.random() * 0.15, 0.9 + Math.random() * 0.4);
-        puff.add(lobe);
-      }
-      const n = new THREE.Vector3().randomDirection();
-      // Keep clouds off the poles a bit so they hug the visible band
-      n.y *= 0.55;
-      n.normalize();
-      puff.position.copy(n.multiplyScalar(radius + 0.16 + Math.random() * 0.05));
-      puff.lookAt(0, 0, 0);
-      this.cloudGroup.add(puff);
-    }
-    this.planetGroup.add(this.cloudGroup);
-
     this.scene.add(this.planetGroup);
     this.eventVfx = new EventVfx(this.planetGroup);
-    this.buildFlocks();
-    this.buildFireflies();
-    this.buildMachines();
-  }
-
-  /** Low-poly beacons / robots that appear on mechanical planets. */
-  private buildMachines(): void {
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x9aa8b8,
-      metalness: 0.55,
-      roughness: 0.35,
-      flatShading: true,
-    });
-    const lampMat = new THREE.MeshBasicMaterial({ color: 0x7ef0d0 });
-    const spots = [
-      { n: new THREE.Vector3(0.4, 0.35, 0.85).normalize(), s: 1 },
-      { n: new THREE.Vector3(-0.7, 0.2, 0.55).normalize(), s: 0.85 },
-      { n: new THREE.Vector3(0.1, -0.55, 0.8).normalize(), s: 0.75 },
-      { n: new THREE.Vector3(0.85, -0.1, -0.4).normalize(), s: 0.9 },
-    ];
-    for (const spot of spots) {
-      const bot = new THREE.Group();
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.03, 6), bodyMat);
-      const tower = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.04), bodyMat);
-      tower.position.y = 0.045;
-      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 6), lampMat);
-      lamp.position.y = 0.09;
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.012), bodyMat);
-      arm.position.set(0.035, 0.05, 0);
-      bot.add(base, tower, lamp, arm);
-      bot.scale.setScalar(spot.s);
-      const ground = terrainHeightAt(spot.n.x, spot.n.y, spot.n.z);
-      bot.position.copy(spot.n).multiplyScalar(1 + ground + 0.01);
-      bot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), spot.n);
-      bot.visible = false;
-      this.machineGroup.add(bot);
-    }
-    this.planetGroup.add(this.machineGroup);
-  }
-
-  private updateMachines(dt: number, mechanical: boolean): void {
-    this.machineSpin += dt;
-    this.machineGroup.visible = mechanical;
-    if (!mechanical) return;
-    this.machineGroup.children.forEach((bot, i) => {
-      bot.rotateY(dt * (0.4 + i * 0.1));
-      const lamp = bot.children[2] as THREE.Mesh | undefined;
-      if (lamp) lamp.visible = Math.sin(this.machineSpin * 6 + i) > 0;
-    });
-  }
-
-  private buildFireflies(): void {
-    const count = 80;
-    const pos = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      const r = 1.08 + Math.random() * 0.25;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = r * Math.cos(phi);
-      pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.fireflyPoints = new THREE.Points(
-      geo,
-      new THREE.PointsMaterial({
-        color: 0xc8ffb0,
-        size: 2.2,
-        sizeAttenuation: false,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        fog: false,
-      }),
-    );
-    this.planetGroup.add(this.fireflyPoints);
-  }
-
-  private updateFireflies(dt: number, personality: string, mushroomGlow: number): void {
-    if (!this.fireflyPoints) return;
-    this.fireflyPhase += dt;
-    // More fireflies when nightGlow or many glowing mushrooms
-    const target =
-      personality === 'nightGlow' ? 0.85 : Math.min(0.55, 0.08 + mushroomGlow * 0.4);
-    const mat = this.fireflyPoints.material as THREE.PointsMaterial;
-    mat.opacity += (target - mat.opacity) * Math.min(1, dt * 2);
-    this.fireflyPoints.rotation.y += dt * 0.08;
-    this.fireflyPoints.rotation.x = Math.sin(this.fireflyPhase * 0.15) * 0.05;
-    const pos = this.fireflyPoints.geometry.getAttribute('position') as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i);
-      pos.setY(i, y + Math.sin(this.fireflyPhase * 1.4 + i) * dt * 0.02);
-    }
-    pos.needsUpdate = true;
   }
 
   private countMushroomGlow(plants: PlantState[]): number {
@@ -566,44 +363,6 @@ export class ThreeRenderer {
       if (p.species === 'mushroom' && p.growth > 0.25) n += p.growth;
     }
     return Math.min(1, n / 8);
-  }
-
-  /** Ambient bird flocks circling the planet — visible as they pass the back side. */
-  private buildFlocks(): void {
-    const dark = new THREE.MeshBasicMaterial({ color: 0x2c3344, transparent: true, opacity: 0.9 });
-    for (let f = 0; f < 2; f++) {
-      const flock = new THREE.Group();
-      for (let i = 0; i < 5; i++) {
-        const bird = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.07, 4), dark);
-        bird.rotation.z = Math.PI / 2;
-        bird.position.set((Math.random() - 0.5) * 0.22, (Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.1);
-        flock.add(bird);
-      }
-      flock.userData.phase = f * Math.PI;
-      flock.userData.tilt = 0.25 + f * 0.15;
-      this.flockGroup.add(flock);
-    }
-    this.scene.add(this.flockGroup);
-  }
-
-  private updateFlocks(dt: number): void {
-    this.flockPhase += dt * 0.22;
-    const R = 1.55;
-    this.flockGroup.children.forEach((flock, i) => {
-      const phase = this.flockPhase + (flock.userData.phase as number);
-      const tilt = flock.userData.tilt as number;
-      flock.position.set(
-        Math.cos(phase) * R,
-        Math.sin(phase * 0.7 + i) * 0.35 * tilt,
-        Math.sin(phase) * R,
-      );
-      // Face along orbit direction
-      flock.rotation.y = -phase + Math.PI / 2;
-      flock.rotation.x = Math.sin(phase * 1.3) * 0.2;
-      flock.children.forEach((c, j) => {
-        c.position.y = (j - 2) * 0.03 + Math.sin(this.flockPhase * 8 + j) * 0.04;
-      });
-    });
   }
 
   private updatePointerFromClient(clientX: number, clientY: number): void {
@@ -1394,7 +1153,7 @@ export class ThreeRenderer {
     this.eventVfx?.play(id, localNormal ?? null, 1);
     // Migrating birds: temporary extra flock burst is already ambient; nudge a close pass
     if (id === 'migratingBirds') {
-      this.flockPhase = -0.4;
+      this.ambience.nudgeFlocks(-0.4);
     }
   }
 
@@ -1526,12 +1285,12 @@ export class ThreeRenderer {
 
     this.applyTimeOfDay(dt);
 
-    this.starGroup.rotation.y += 0.00012;
-    this.cloudGroup.rotation.y += 0.0004;
     this.oceanMesh.rotation.y += 0.00005;
-    this.updateFlocks(dt);
-    this.updateFireflies(dt, this.lastPersonality, this.lastMushroomGlow);
-    this.updateMachines(dt, this.lastPersonality === 'mechanical');
+    this.ambience.update(dt, {
+      personality: this.lastPersonality,
+      mushroomGlow: this.lastMushroomGlow,
+      mechanical: this.lastPersonality === 'mechanical',
+    });
     this.eventVfx?.update(dt);
 
     // Keep light/hover fresh while the planet coasts under a still finger/cursor
@@ -1612,6 +1371,7 @@ export class ThreeRenderer {
     window.removeEventListener('resize', this.resize);
     this.eventVfx?.dispose();
     this.eventVfx = null;
+    this.ambience.dispose();
     for (const view of this.plantViews.values()) disposeObject(view.root);
     for (const view of this.animalViews.values()) disposeObject(view.root);
     if (this.grassMesh) {
