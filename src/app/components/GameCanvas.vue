@@ -362,7 +362,7 @@ async function manualSave() {
     <EcoPanel :open="showStats" @replay="startReplay" @close="closeStats" />
 
     <transition name="fade">
-      <div v-if="store.selection.kind !== 'none'" class="hud selection-panel">
+      <div v-if="store.selection.kind !== 'none'" class="selection-panel">
         <div class="panel-title">选中</div>
         <div class="sel-title">{{ store.selection.title }}</div>
         <div v-for="row in store.selection.rows" :key="row.label" class="sel-row">
@@ -446,15 +446,6 @@ async function manualSave() {
   font-size: 12px !important;
 }
 
-.hud {
-  position: absolute;
-  z-index: 2;
-  background: rgba(10, 16, 32, 0.72);
-  border: 1px solid rgba(140, 170, 220, 0.18);
-  backdrop-filter: blur(10px);
-  border-radius: 14px;
-}
-
 .panel-title {
   font-size: 11px;
   text-transform: uppercase;
@@ -480,11 +471,16 @@ async function manualSave() {
 }
 
 .selection-panel {
+  position: absolute;
   bottom: 16px;
   left: 160px;
   width: 180px;
   padding: 10px 12px;
   z-index: 5;
+  background: rgba(10, 16, 32, 0.72);
+  border: 1px solid rgba(140, 170, 220, 0.18);
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
   display: flex;
   flex-direction: column;
   gap: 4px;
