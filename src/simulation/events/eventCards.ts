@@ -23,30 +23,31 @@ export const EVENT_DEFS: EventDef[] = [
   {
     id: 'meteor',
     title: '流星坠落',
-    body: '一颗流星划过夜空。接受它可能留下矿石星尘，也可能砸坏附近植被。',
+    body: '一颗流星划过夜空。矿石星尘就在眼前，但坠落点附近的植被一定会被灼伤。',
     acceptLabel: '迎接流星',
     declineLabel: '避开',
     weight: 1,
     apply(world, rng) {
       const n = randomOnSphere(v3(), rng);
       world.resources.stardust += 12;
-      let scorched: string | null = null;
-      for (const p of world.plants) {
-        const d = ang(p.position.normal, n);
-        if (d < 0.35) {
-          p.health = Math.max(0, p.health - 0.45);
-          p.growth = Math.max(0, p.growth - 0.3);
-          scorched = p.id;
-          break;
-        }
+      const scorched = world.plants
+        .map((p) => ({ p, d: ang(p.position.normal, n) }))
+        .filter((x) => x.d < 0.35)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 3);
+      for (const { p } of scorched) {
+        p.health = Math.max(0, p.health - 0.45);
+        p.growth = Math.max(0, p.growth - 0.3);
       }
       return {
-        message: scorched ? '流星带来了星尘，也留下一片焦痕。' : '流星带来了闪亮的星尘。',
+        message: scorched.length
+          ? `流星带来 12 枚星尘，也灼伤了 ${scorched.length} 株植被。`
+          : '流星落在荒地上，只留下闪亮的星尘。',
         impact: n,
       };
     },
     decline() {
-      return '流星擦过大气层，什么也没留下。';
+      return '流星擦过大气层，矿石星尘随之散失。';
     },
   },
   {
@@ -97,7 +98,7 @@ export const EVENT_DEFS: EventDef[] = [
   {
     id: 'strangeSeed',
     title: '奇怪的种子',
-    body: '风里带来一包陌生的种子。也许能长出新的花草？',
+    body: '风里带来一包陌生的种子。它们长得快，也会抢走邻近植物的养分。',
     acceptLabel: '种下试试',
     declineLabel: '丢掉',
     weight: 1.2,
@@ -112,13 +113,25 @@ export const EVENT_DEFS: EventDef[] = [
       world.resources.stardust -= cost;
       const n = randomOnSphere(v3(), rng);
       const species = rng() < 0.45 ? 'flower' : 'grass';
+      // Established neighbours lose nutrients to the fast-growing stranger
+      const crowded = world.plants
+        .map((p) => ({ p, d: ang(p.position.normal, n) }))
+        .filter((x) => x.d < 0.3 && x.p.growth > 0.1)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 3);
       for (let i = 0; i < 3; i++) {
         const jitter = randomOnSphere(v3(), rng);
         const p = makePlantForEvent(species, mix(n, jitter, 0.15));
         world.plants.push(p);
       }
+      for (const { p } of crowded) {
+        p.growth = Math.max(0, p.growth - 0.12);
+        p.health = Math.max(0, p.health - 0.05);
+      }
       return {
-        message: species === 'flower' ? '奇怪的种子开出了花。' : '奇怪的种子长成了一片草。',
+        message: crowded.length
+          ? `种子长成${species === 'flower' ? '一片花' : '一片草'}，也吸走了邻近植物的养分。`
+          : `奇怪的种子长成了${species === 'flower' ? '一片花' : '一片草'}。`,
         impact: n,
       };
     },
@@ -162,28 +175,37 @@ export const EVENT_DEFS: EventDef[] = [
   {
     id: 'mechanicalVisitor',
     title: '机械访客',
-    body: '一台小小的维修机器人路过。它可帮忙巡查设施，并留下一些可用的星尘零件。',
+    body: '一台小小的维修机器人路过。它愿意修好虚弱的植株，但铺设零件会压坏一些草，也会让星球更偏机械。',
     acceptLabel: '欢迎停靠',
     declineLabel: '不必了',
     weight: 0.9,
     apply(world, rng) {
-      world.resources.stardust += 9;
+      world.resources.stardust += 4;
       world.modifiers.machineScore = (world.modifiers.machineScore ?? 0) + 1;
-      // Repair a weak plant
-      const weak = world.plants.filter((p) => p.health < 0.7);
-      if (weak.length) {
-        const p = weak[Math.floor(rng() * weak.length)];
-        p.health = Math.min(1, p.health + 0.35);
-        return {
-          message: '机器人修好了附近一株植物，留下零件离去。',
-          impact: p.position.normal,
-        };
+      // Machinery claims ground from the grass it rolls over
+      const grass = world.plants.filter((p) => p.species === 'grass' && p.growth > 0.1);
+      let cleared = 0;
+      for (let i = 0; i < 3 && grass.length; i++) {
+        const idx = Math.floor(rng() * grass.length);
+        const p = grass.splice(idx, 1)[0];
+        p.growth = Math.max(0, p.growth - 0.12);
+        p.health = Math.max(0, p.health - 0.05);
+        cleared++;
       }
-      const n = randomOnSphere(v3(), rng);
-      return { message: '机器人转了一圈，卸下几枚零件星尘。', impact: n };
+      // Repair weak plants while it is here
+      const weak = world.plants.filter((p) => p.health < 0.7).slice(0, 2);
+      for (const p of weak) p.health = Math.min(1, p.health + 0.3);
+      const impact = weak[0]?.position.normal ?? randomOnSphere(v3(), rng);
+      const parts = cleared ? `，也压坏了 ${cleared} 丛草` : '';
+      return {
+        message: weak.length
+          ? `机器人修好了 ${weak.length} 株植物，留下 4 枚零件星尘${parts}。`
+          : `机器人转了一圈，卸下 4 枚零件星尘${parts}。`,
+        impact,
+      };
     },
     decline() {
-      return '机器人礼貌地驶向远方。';
+      return '机器人礼貌地驶向远方，草地与植株保持原样。';
     },
   },
   {
@@ -225,7 +247,7 @@ export const EVENT_DEFS: EventDef[] = [
   {
     id: 'gentleRain',
     title: '温柔的雨',
-    body: '云层聚拢，一场及时雨即将落下。湖泊会丰盈一些。',
+    body: '云层聚拢，一场及时雨即将落下。湖泊会丰盈，但连日阴云也会让植物受一段凉。',
     acceptLabel: '迎接雨水',
     declineLabel: '避开云层',
     weight: 1,
@@ -233,10 +255,14 @@ export const EVENT_DEFS: EventDef[] = [
       for (const lake of world.planet.lakes) {
         lake.water = Math.min(1, lake.water + 0.22);
       }
-      world.modifiers.coldDays = Math.max(world.modifiers.coldDays, 0.5);
-      return { message: '细雨落下，湖面微涨；雨后空气转凉。' };
+      world.modifiers.coldDays = Math.max(world.modifiers.coldDays, 1.5);
+      return { message: '细雨落下，湖面微涨；连日阴云让植物受凉，生长放缓。' };
     },
-    decline() {
+    decline(world) {
+      if (world.modifiers.droughtDays > 0) {
+        world.modifiers.droughtDays += 1;
+        return { message: '你避开了云层，干旱少了缓解，继续蔓延。' };
+      }
       return '云从旁边飘走了。';
     },
   },

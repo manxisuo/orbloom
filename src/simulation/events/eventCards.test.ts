@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mulberry32 } from '../../shared/math';
+import { mulberry32, randomOnSphere, v3 } from '../../shared/math';
 import { createWorld } from '../WorldSimulation';
 import { EVENT_DEFS, findEventDef, pickEvent, toPending } from './eventCards';
 
@@ -16,11 +16,19 @@ describe('pickEvent', () => {
 });
 
 describe('event apply effects', () => {
-  it('meteor grants stardust', () => {
+  it('meteor grants stardust and always scorches the impact site', () => {
     const world = createWorld(1);
     world.resources.stardust = 0;
-    findEventDef('meteor').apply(world, mulberry32(1));
+    const n = randomOnSphere(v3(), mulberry32(1));
+    const target = world.plants[0];
+    target.position.normal = n;
+    target.health = 1;
+    target.growth = 1;
+    const result = findEventDef('meteor').apply(world, mulberry32(1));
     expect(world.resources.stardust).toBe(12);
+    expect(target.health).toBeLessThan(1);
+    const message = typeof result === 'string' ? result : result.message;
+    expect(message).toMatch(/灼伤/);
   });
 
   it('coldNight and drought set modifiers', () => {
@@ -42,6 +50,18 @@ describe('event apply effects', () => {
     findEventDef('strangeSeed').apply(world, mulberry32(1));
     expect(world.plants.length).toBe(before + 3);
     expect(world.resources.stardust).toBe(8);
+  });
+
+  it('strangeSeed crowds out established neighbours', () => {
+    const world = createWorld(1);
+    world.resources.stardust = 10;
+    const n = randomOnSphere(v3(), mulberry32(1));
+    const neighbour = world.plants[0];
+    neighbour.position.normal = n;
+    neighbour.growth = 0.8;
+    neighbour.health = 1;
+    findEventDef('strangeSeed').apply(world, mulberry32(1));
+    expect(neighbour.growth).toBeLessThan(0.8);
   });
 
   it('strangeSeed cannot be accepted when crowded or broke', () => {
@@ -70,12 +90,18 @@ describe('event apply effects', () => {
     expect(world.delayedEvents).toEqual([{ kind: 'birdGift', fireAt: world.time.dayLength * 2.5 }]);
   });
 
-  it('mechanicalVisitor scores the machine personality', () => {
+  it('mechanicalVisitor scores the machine personality at a cost to nature', () => {
     const world = createWorld(1);
     world.resources.stardust = 0;
+    const damageable = world.plants.filter((p) => p.species === 'grass' && p.growth > 0.1);
+    const growthBefore = damageable.reduce((s, p) => s + p.growth, 0);
     findEventDef('mechanicalVisitor').apply(world, mulberry32(1));
-    expect(world.resources.stardust).toBe(9);
+    expect(world.resources.stardust).toBe(4);
     expect(world.modifiers.machineScore).toBe(1);
+    if (damageable.length) {
+      const growthAfter = damageable.reduce((s, p) => s + p.growth, 0);
+      expect(growthAfter).toBeLessThan(growthBefore);
+    }
   });
 
   it('planetWhisper plants trees at a stardust cost and schedules a whisper gift', () => {
@@ -99,12 +125,28 @@ describe('event apply effects', () => {
     expect(world.delayedEvents).toHaveLength(0);
   });
 
-  it('gentleRain raises lake water at the cost of a brief chill', () => {
+  it('gentleRain raises lake water at the cost of a lingering chill', () => {
     const world = createWorld(1);
     const before = world.planet.lakes[0].water;
     findEventDef('gentleRain').apply(world, mulberry32(1));
     expect(world.planet.lakes[0].water).toBeGreaterThan(before);
-    expect(world.modifiers.coldDays).toBeGreaterThanOrEqual(0.5);
+    expect(world.modifiers.coldDays).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it('declining gentleRain prolongs an active drought', () => {
+    const world = createWorld(1);
+    world.modifiers.droughtDays = 2;
+    const result = findEventDef('gentleRain').decline!(world, mulberry32(1));
+    expect(world.modifiers.droughtDays).toBe(3);
+    const message = typeof result === 'string' ? result : result.message;
+    expect(message).toMatch(/干旱/);
+  });
+
+  it('declining gentleRain on a healthy planet is harmless', () => {
+    const world = createWorld(1);
+    world.modifiers.droughtDays = 0;
+    findEventDef('gentleRain').decline!(world, mulberry32(1));
+    expect(world.modifiers.droughtDays).toBe(0);
   });
 
   it('wildHarvest trades ecosystem health for stardust, and declining strengthens it', () => {
