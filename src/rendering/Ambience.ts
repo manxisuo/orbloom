@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { terrainHeightAt } from '../shared/terrain';
 
 /**
@@ -241,11 +242,11 @@ export class Ambience {
   /** Ambient bird flocks circling the planet — visible as they pass the back side. */
   private buildFlocks(): void {
     const dark = new THREE.MeshBasicMaterial({ color: 0x2c3344, transparent: true, opacity: 0.9 });
+    const birdGeo = makeBirdGeometry();
     for (let f = 0; f < 2; f++) {
       const flock = new THREE.Group();
       for (let i = 0; i < 5; i++) {
-        const bird = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.07, 4), dark);
-        bird.rotation.z = Math.PI / 2;
+        const bird = new THREE.Mesh(birdGeo, dark);
         bird.position.set((Math.random() - 0.5) * 0.22, (Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.1);
         flock.add(bird);
       }
@@ -300,4 +301,36 @@ function disposeObject(root: THREE.Object3D): void {
     if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
     else if (mat) mat.dispose();
   });
+}
+
+/** Small low-poly bird: body + head + two swept wings + tail, facing -X. */
+function makeBirdGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+
+  const body = new THREE.SphereGeometry(0.02, 6, 5);
+  body.scale(1.9, 0.8, 0.8);
+  parts.push(body);
+
+  const head = new THREE.SphereGeometry(0.013, 5, 4);
+  head.translate(-0.035, 0.006, 0);
+  parts.push(head);
+
+  const tail = new THREE.ConeGeometry(0.013, 0.04, 4);
+  tail.rotateZ(-Math.PI / 2); // apex toward +X
+  tail.scale(1, 0.4, 1.7); // flatten and widen the fan
+  tail.translate(0.045, 0, 0);
+  parts.push(tail);
+
+  for (const side of [-1, 1]) {
+    const wing = new THREE.BoxGeometry(0.024, 0.003, 0.06);
+    wing.translate(0, 0, side * 0.03); // root at origin, sweeping outward
+    wing.rotateX(side * 0.5); // dihedral: tips up
+    wing.rotateY(side * 0.25); // sweep back
+    wing.translate(0.004, 0.006, 0);
+    parts.push(wing);
+  }
+
+  const geo = mergeGeometries(parts, false)!;
+  parts.forEach((p) => p.dispose());
+  return geo;
 }
