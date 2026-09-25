@@ -1,8 +1,8 @@
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 
-// GitHub Pages project site: https://manxisuo.github.io/orbloom/
+// Vercel / local: `/`. GitHub Pages project site needs `/orbloom/` via BASE_PATH.
 export default defineConfig({
   plugins: [vue()],
-  base: '/orbloom/',
+  base: process.env.BASE_PATH || '/',
 })
