@@ -33,8 +33,9 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
         v-for="t in tools"
         :key="t.id"
         class="tool-btn"
-        :class="{ active: store.tool === t.id }"
-        :title="t.hint"
+        :class="{ active: store.tool === t.id, unaffordable: t.cost != null && store.stardust < t.cost }"
+        :title="t.cost != null && store.stardust < t.cost ? `星尘不足（需 ${t.cost}）` : t.hint"
+        :disabled="t.cost != null && store.stardust < t.cost"
         @click="emit('pick', t.id)"
       >
         <span class="tool-label">{{ t.label }}</span>
@@ -42,8 +43,9 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
       </button>
       <button
         class="tool-btn rain-btn"
-        :disabled="store.rainCooldown > 0"
-        :title="`滋润湖泊，消耗 ${RAIN_COST} 星尘`"
+        :class="{ unaffordable: store.stardust < RAIN_COST }"
+        :disabled="store.rainCooldown > 0 || store.stardust < RAIN_COST"
+        :title="store.stardust < RAIN_COST ? `星尘不足（需 ${RAIN_COST}）` : `滋润湖泊，消耗 ${RAIN_COST} 星尘`"
         @click="emit('rain')"
       >
         <span>{{ store.rainCooldown > 0 ? `冷却 ${Math.ceil(store.rainCooldown / Math.max(1, store.speed))}s` : '降雨' }}</span>
@@ -120,8 +122,10 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
   justify-content: center;
   gap: 8px;
 }
-.rain-btn:disabled {
-  opacity: 0.5;
+.rain-btn:disabled,
+.tool-btn:disabled,
+.tool-btn.unaffordable {
+  opacity: 0.42;
   cursor: default;
 }
 .rain-cost {
