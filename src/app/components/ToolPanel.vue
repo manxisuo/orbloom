@@ -46,7 +46,7 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
         :title="`滋润湖泊，消耗 ${RAIN_COST} 星尘`"
         @click="emit('rain')"
       >
-        <span>{{ store.rainCooldown > 0 ? `冷却 ${Math.ceil(store.rainCooldown)}s` : '降雨' }}</span>
+        <span>{{ store.rainCooldown > 0 ? `冷却 ${Math.ceil(store.rainCooldown / Math.max(1, store.speed))}s` : '降雨' }}</span>
         <span class="tool-cost rain-cost"><span class="cost-dot" />{{ RAIN_COST }}</span>
       </button>
     </div>
