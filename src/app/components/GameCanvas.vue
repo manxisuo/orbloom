@@ -151,8 +151,10 @@ onMounted(async () => {
         .reduce((sum, p) => sum + p.growth, 0),
     });
   }, {
-    seed: 42,
-    boot: loadedWorld ? { kind: 'loaded', world: loadedWorld } : { kind: 'new', seed: 42 },
+    seed: Math.floor(Math.random() * 1e9),
+    boot: loadedWorld
+      ? { kind: 'loaded', world: loadedWorld }
+      : { kind: 'new', seed: Math.floor(Math.random() * 1e9) },
     saveRepository: repo,
     onNotify: (msg) => store.flash(msg),
   });
