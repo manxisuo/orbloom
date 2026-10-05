@@ -36,6 +36,8 @@ export const useGameStore = defineStore('game', () => {
     day: 1,
   });
   const log = ref<LogEntry[]>([]);
+  /** Full chronological log for replay firsts (HUD log is only a recent window). */
+  const chronicle = ref<LogEntry[]>([]);
   const logFilter = ref<'all' | LogKind>('all');
   const replayOpen = ref(false);
   const replayIndex = ref(0);
@@ -74,8 +76,7 @@ export const useGameStore = defineStore('game', () => {
       seen.add(e.id);
       out.push(e);
     };
-    // log.value is reversed (newest first), so use .slice().reverse() to search chronologically
-    const chronological = log.value.slice().reverse();
+    const chronological = chronicle.value.length ? chronicle.value : log.value.slice().reverse();
     const first = (pred: (e: LogEntry) => boolean) => push(chronological.find(pred));
     first((e) => e.kind === 'plant' && e.text.includes('种下'));
     first((e) => e.text.includes('兔子来到了'));
@@ -95,6 +96,7 @@ export const useGameStore = defineStore('game', () => {
     speed: number;
     stats: EcoStats;
     log: LogEntry[];
+    chronicle?: LogEntry[];
     hoverLight: number;
     hoverWater: number;
     hoverLabel: string;
@@ -108,6 +110,7 @@ export const useGameStore = defineStore('game', () => {
     speed.value = payload.speed;
     stats.value = payload.stats;
     log.value = payload.log;
+    if (payload.chronicle) chronicle.value = payload.chronicle;
     hoverLight.value = payload.hoverLight;
     hoverWater.value = payload.hoverWater;
     hoverLabel.value = payload.hoverLabel;

@@ -124,6 +124,7 @@ onMounted(async () => {
       speed: world.time.speed,
       stats: world.stats,
       log: world.log.slice(-60).reverse(),
+      chronicle: world.log,
       hoverLight,
       hoverWater,
       hoverLabel,
