@@ -1,10 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useGameStore } from '../stores/gameStore';
 
 defineProps<{ open: boolean }>();
 const emit = defineEmits<{ replay: []; close: [] }>();
 
 const store = useGameStore();
+
+/** Global daylight from the solar clock — not the hovered surface point. */
+const globalLight = computed(() => {
+  const f = store.stats.dayFraction;
+  if (f < 0.35) return 0.92 - (f / 0.35) * 0.08;
+  if (f < 0.5) return 0.84 - ((f - 0.35) / 0.15) * 0.4;
+  if (f < 0.85) return 0.38 + Math.sin(((f - 0.5) / 0.35) * Math.PI) * 0.05;
+  return 0.38 + ((f - 0.85) / 0.15) * 0.5;
+});
 
 const logFilters = [
   { id: 'all' as const, label: '全部' },
@@ -20,19 +30,19 @@ const logFilters = [
 <template>
   <aside class="hud stats-panel" :class="{ 'stats-open': open }">
     <div class="panel-title">生态状态</div>
-    <div class="stat-row">
+    <div class="stat-row" title="整颗星球当前的昼夜亮度。白天偏满，夜里剩月光，不跟鼠标指到的那一点走。">
       <span>日照</span>
-      <div class="bar"><i :style="{ width: `${Math.round(store.hoverLight * 100)}%` }" /></div>
+      <div class="bar"><i :style="{ width: `${Math.round(globalLight * 100)}%` }" /></div>
     </div>
-    <div class="stat-row">
+    <div class="stat-row" title="植物体内水分与湖泊水位的综合。靠近湖、降雨会升高，干旱和烈日会蒸发。">
       <span>水分</span>
       <div class="bar water"><i :style="{ width: `${Math.round(store.stats.averageWater * 100)}%` }" /></div>
     </div>
-    <div class="stat-row">
+    <div class="stat-row" title="植物平均健康。缺光、缺水、寒冷或被啃食会下降，授粉和照料会回升。">
       <span>健康</span>
       <div class="bar health"><i :style="{ width: `${Math.round(store.stats.averageHealth * 100)}%` }" /></div>
     </div>
-    <div class="stat-row">
+    <div class="stat-row" title="生态是否平衡：植物数量、健康、水分、湖水和少量动物权重。过空或过挤都会偏低。">
       <span>稳定</span>
       <div class="bar stable"><i :style="{ width: `${Math.round(store.stats.stability * 100)}%` }" /></div>
     </div>

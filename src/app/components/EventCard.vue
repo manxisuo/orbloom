@@ -13,10 +13,18 @@ const emit = defineEmits<{ resolve: [accept: boolean] }>();
         <h2>{{ store.pendingEvent.title }}</h2>
         <p>{{ store.pendingEvent.body }}</p>
         <div class="event-actions">
-          <button class="event-btn primary" @click="emit('resolve', true)">
+          <button
+            class="event-btn primary"
+            :aria-label="store.pendingEvent.acceptLabel"
+            @click="emit('resolve', true)"
+          >
             {{ store.pendingEvent.acceptLabel }}
           </button>
-          <button class="event-btn" @click="emit('resolve', false)">
+          <button
+            class="event-btn"
+            :aria-label="store.pendingEvent.declineLabel"
+            @click="emit('resolve', false)"
+          >
             {{ store.pendingEvent.declineLabel }}
           </button>
         </div>

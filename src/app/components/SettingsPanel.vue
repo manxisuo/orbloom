@@ -13,6 +13,7 @@ const qualityOptions = [
   { id: 'high' as const, label: '高' },
 ];
 
+const isDev = import.meta.env.DEV;
 const eventDefs = EVENT_DEFS;
 </script>
 
@@ -46,17 +47,19 @@ const eventDefs = EVENT_DEFS;
       <button class="tool-btn" @click="toggleMute">{{ muted ? '取消静音' : '静音' }}</button>
       <p class="hint">首次点击画面后才会出声</p>
 
-      <div class="panel-title">触发事件（测试）</div>
-      <div class="event-grid">
-        <button
-          v-for="ev in eventDefs"
-          :key="ev.id"
-          class="tool-btn event-chip"
-          @click="emit('trigger-event', ev.id)"
-        >
-          {{ ev.title }}
-        </button>
-      </div>
+      <template v-if="isDev">
+        <div class="panel-title">触发事件（测试）</div>
+        <div class="event-grid">
+          <button
+            v-for="ev in eventDefs"
+            :key="ev.id"
+            class="tool-btn event-chip"
+            @click="emit('trigger-event', ev.id)"
+          >
+            {{ ev.title }}
+          </button>
+        </div>
+      </template>
     </div>
   </transition>
 </template>

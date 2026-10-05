@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, computed } from 'vue';
-import { Game, type SelectionInfo } from '../../game/Game';
+import type { Game, SelectionInfo } from '../../game/Game';
 import { useGameStore } from '../stores/gameStore';
 import type { ToolMode, EventId } from '../../shared/types';
 import { createSaveRepository } from '../../persistence';
@@ -67,6 +67,9 @@ const storageLabel = ref(repo.backendName);
 const saving = ref(false);
 const lastSavedLabel = ref('');
 const fatalError = ref('');
+const loadError = ref('');
+const confirmNewPlanet = ref(false);
+const engineReady = ref(false);
 
 onMounted(async () => {
   loadAudioPrefs();
@@ -80,17 +83,24 @@ onMounted(async () => {
 
   let loadedWorld: import('../../shared/types').GameWorldState | null = null;
   try {
-    const latest = await repo.loadLatest();
-    if (latest) {
+    const inspected = await repo.inspectLatest();
+    if (inspected.status === 'ok') {
       hasExistingSave.value = true;
-      existingMeta.value = latest.meta;
-      loadedWorld = latest.world;
+      existingMeta.value = inspected.save.meta;
+      loadedWorld = inspected.save.world;
+    } else if (inspected.status === 'corrupt') {
+      loadError.value = inspected.error;
+      hasExistingSave.value = false;
+      loadedWorld = null;
     }
-  } catch {
-    // Storage may be unavailable — still allow new game.
+  } catch (err) {
+    loadError.value = err instanceof Error ? err.message : '存档数据损坏';
+    hasExistingSave.value = false;
+    loadedWorld = null;
   }
 
   try {
+    const { Game } = await import('../../game/Game');
     game = new Game(canvas, (world, hover, selection) => {
     let hoverLight = 0;
     let hoverWater = 0;
@@ -117,6 +127,7 @@ onMounted(async () => {
       speed: world.time.speed,
       stats: world.stats,
       log: world.log.slice(-60).reverse(),
+      chronicle: world.log,
       hoverLight,
       hoverWater,
       hoverLabel,
@@ -135,10 +146,19 @@ onMounted(async () => {
           }
         : null,
     });
-    tickTutorial(world.planet.rotationY, world.stats.plantCount);
+    tickTutorial({
+      rotY: world.planet.rotationY,
+      plantCount: world.stats.plantCount,
+      rabbitEating: world.animals.some((a) => a.species === 'rabbit' && a.state === 'eat'),
+      grassGrowth: world.plants
+        .filter((p) => p.species === 'grass')
+        .reduce((sum, p) => sum + p.growth, 0),
+    });
   }, {
-    seed: 42,
-    boot: loadedWorld ? { kind: 'loaded', world: loadedWorld } : { kind: 'new', seed: 42 },
+    seed: Math.floor(Math.random() * 1e9),
+    boot: loadedWorld
+      ? { kind: 'loaded', world: loadedWorld }
+      : { kind: 'new', seed: Math.floor(Math.random() * 1e9) },
     saveRepository: repo,
     onNotify: (msg) => store.flash(msg),
   });
@@ -146,6 +166,7 @@ onMounted(async () => {
     fatalError.value = err instanceof Error ? err.message : '无法初始化 3D 渲染。';
     return;
   }
+  engineReady.value = true;
 
   game.setTool(store.tool);
   const savedQ = localStorage.getItem('orbloom:quality') as 'low' | 'medium' | 'high' | null;
@@ -156,20 +177,22 @@ onMounted(async () => {
     quality.value = game.renderer.getQuality();
   }
 
-  if (hasExistingSave.value) {
+  if (hasExistingSave.value || loadError.value) {
     game.setSpeed(0);
     bootReady.value = true;
   } else {
     game.start();
     bootReady.value = false;
     store.setWorldReady(true);
-    initTutorial(false);
+    initTutorial(false, game.world.stats.plantCount);
   }
 
   // Auto-fit the eco/log panel to the viewport until the player toggles it.
   stopDeviceWatch = watchDevice(({ narrow }) => {
     if (!statsUserToggled) showStats.value = !narrow;
   });
+
+  window.addEventListener('keydown', onKeydown);
 });
 
 function clearSelection() {
@@ -180,11 +203,67 @@ function clearSelection() {
 const { start: startReplay, stop: stopReplay, dispose: disposeReplay } = useReplay();
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown);
   stopDeviceWatch?.();
   disposeReplay();
   game?.dispose();
   game = null;
 });
+
+const KEY_TOOLS: Record<string, ToolMode> = {
+  Digit1: 'inspect',
+  Digit2: 'plant-tree',
+  Digit3: 'plant-grass',
+  Digit4: 'plant-flower',
+  Digit5: 'plant-mushroom',
+  Digit6: 'spawn-rabbit',
+  Digit7: 'spawn-fox',
+};
+
+function onKeydown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement | null;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    return;
+  }
+  if (fatalError.value || !store.worldReady) return;
+  if (store.replayOpen) return;
+
+  if (e.code === 'Space') {
+    e.preventDefault();
+    setSpeed(store.speed === 0 ? 1 : 0);
+    return;
+  }
+  if (e.code === 'KeyR') {
+    e.preventDefault();
+    castRain();
+    return;
+  }
+  const tool = KEY_TOOLS[e.code];
+  if (tool) {
+    e.preventDefault();
+    pickTool(tool);
+    return;
+  }
+  if (e.code === 'ArrowLeft') {
+    e.preventDefault();
+    game?.rotatePlanet(-10, 0);
+    return;
+  }
+  if (e.code === 'ArrowRight') {
+    e.preventDefault();
+    game?.rotatePlanet(10, 0);
+    return;
+  }
+  if (e.code === 'ArrowUp') {
+    e.preventDefault();
+    game?.rotatePlanet(0, -8);
+    return;
+  }
+  if (e.code === 'ArrowDown') {
+    e.preventDefault();
+    game?.rotatePlanet(0, 8);
+  }
+}
 
 function speciesName(s: string) {
   return s === 'tree' ? '树木' : s === 'grass' ? '草地' : s === 'mushroom' ? '发光蘑菇' : '花朵';
@@ -270,6 +349,7 @@ function setSpeed(v: number) {
 
 function continueGame() {
   if (!game) return;
+  loadError.value = '';
   game.setSpeed(1);
   store.setSpeed(1);
   game.start();
@@ -282,19 +362,26 @@ function continueGame() {
 function startNewGame() {
   if (!game) return;
   const go = () => {
+    loadError.value = '';
     game?.newGame();
     game?.setSpeed(1);
     store.setSpeed(1);
     game?.start();
     bootReady.value = false;
     store.setWorldReady(true);
-    initTutorial(false);
+    initTutorial(false, game?.world.stats.plantCount ?? 0);
     store.flash('新的星球苏醒了');
   };
-  if (hasExistingSave.value) {
-    if (!window.confirm('已有存档。开始新星球将覆盖自动存档，确定吗？')) return;
+  if (hasExistingSave.value && !confirmNewPlanet.value) {
+    confirmNewPlanet.value = true;
+    return;
   }
+  confirmNewPlanet.value = false;
   go();
+}
+
+function cancelNewPlanet() {
+  confirmNewPlanet.value = false;
 }
 
 function setQuality(level: 'low' | 'medium' | 'high') {
@@ -322,6 +409,14 @@ async function manualSave() {
   <div class="game-shell">
     <canvas ref="canvasRef" class="game-canvas" />
 
+    <div v-if="!engineReady && !fatalError" class="fatal-overlay" aria-live="polite">
+      <div class="fatal-card">
+        <div class="boot-orb loading-orb" />
+        <h1>正在唤醒星球</h1>
+        <p>加载三维引擎与星空……</p>
+      </div>
+    </div>
+
     <div v-if="fatalError" class="fatal-overlay">
       <div class="fatal-card">
         <h1>无法启动 3D 渲染</h1>
@@ -331,12 +426,24 @@ async function manualSave() {
     </div>
 
     <BootOverlay
-      v-if="bootReady"
+      v-if="bootReady && !confirmNewPlanet"
       :meta="existingMeta"
       :storage-label="storageLabel"
+      :load-error="loadError || null"
       @continue="continueGame"
       @new-game="startNewGame"
     />
+
+    <div v-if="confirmNewPlanet" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-new-title">
+      <div class="confirm-card">
+        <h2 id="confirm-new-title">开始新星球？</h2>
+        <p>已有存档。新星球会覆盖自动存档，确定吗？</p>
+        <div class="confirm-actions">
+          <button class="tool-btn" @click="cancelNewPlanet">再想想</button>
+          <button class="tool-btn confirm-ok" @click="startNewGame">确定覆盖</button>
+        </div>
+      </div>
+    </div>
 
     <TopBar
       :personality-label="personalityLabel"
@@ -445,6 +552,26 @@ async function manualSave() {
   opacity: 0.55 !important;
   font-size: 12px !important;
 }
+.loading-orb {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #b8f0c8, #3d8fd1 55%, #1a3a5c);
+  box-shadow: 0 0 24px rgba(100, 180, 255, 0.4);
+  animation: orb-pulse 1.6s ease-in-out infinite;
+}
+@keyframes orb-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.06);
+    filter: brightness(1.15);
+  }
+}
 
 .panel-title {
   font-size: 11px;
@@ -498,6 +625,48 @@ async function manualSave() {
 }
 .sel-row b {
   font-variant-numeric: tabular-nums;
+}
+
+.confirm-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 16;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 8, 20, 0.72);
+  backdrop-filter: blur(8px);
+  padding: 24px;
+}
+.confirm-card {
+  width: min(360px, 100%);
+  padding: 22px 20px 16px;
+  border-radius: 16px;
+  background: rgba(12, 18, 36, 0.95);
+  border: 1px solid rgba(150, 180, 230, 0.22);
+  text-align: center;
+}
+.confirm-card h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.confirm-card p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.55;
+  opacity: 0.8;
+}
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+.confirm-actions .tool-btn {
+  flex: 1;
+  justify-content: center;
+}
+.confirm-ok {
+  background: linear-gradient(135deg, #3d8fd1, #4caf82);
+  border-color: transparent;
+  font-weight: 600;
 }
 
 .notice {

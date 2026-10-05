@@ -27,7 +27,7 @@ npm run dev
 
 ```bash
 npm run build   # 类型检查 + 生产构建
-npm test        # Vitest（存档层）
+npm test        # Vitest（存档 / 模拟 / 渲染单测）
 npm run preview
 ```
 
@@ -73,7 +73,6 @@ src/
 | 左侧工具 + 点击球面 | 种树 / 种草 / 引兔 / 降雨 |
 | 右上角速度 | 暂停与加速 |
 
-## 设计文档
+## 在线试玩
 
-- 完整创意见 [游戏描述.md](./游戏描述.md)
-- 技术选型与架构见 [技术栈.md](./技术栈.md)
+https://manxisuo.github.io/orbloom/

@@ -11,6 +11,11 @@ export interface LoadedSave {
   world: GameWorldState;
 }
 
+export type InspectLatestResult =
+  | { status: 'none' }
+  | { status: 'ok'; save: LoadedSave }
+  | { status: 'corrupt'; error: string };
+
 /**
  * High-level save API. Depends only on StorageAdapter — swap backends freely.
  */
@@ -72,9 +77,33 @@ export class SaveRepository {
   }
 
   async loadLatest(): Promise<LoadedSave | null> {
+    const inspected = await this.inspectLatest();
+    return inspected.status === 'ok' ? inspected.save : null;
+  }
+
+  /**
+   * Distinguish "no save" from "save exists but cannot be read".
+   * A corrupt autosave must not be treated as a fresh planet.
+   */
+  async inspectLatest(): Promise<InspectLatestResult> {
+    const keys = await this.storage.keys(this.prefix);
+    if (keys.length === 0) return { status: 'none' };
+
     const metas = await this.listSaves();
-    if (metas.length === 0) return null;
-    return this.loadSave(metas[0].id);
+    if (metas.length > 0) {
+      try {
+        const save = await this.loadSave(metas[0].id);
+        if (save) return { status: 'ok', save };
+      } catch (err) {
+        return {
+          status: 'corrupt',
+          error: err instanceof Error ? err.message : '存档无法读取',
+        };
+      }
+    }
+
+    // Keys exist but every entry failed migrate/parse in listSaves.
+    return { status: 'corrupt', error: '存档数据损坏，无法继续值日' };
   }
 
   /** Restore id counter and return a detached world copy ready to play. */

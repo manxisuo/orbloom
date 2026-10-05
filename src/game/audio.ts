@@ -9,6 +9,8 @@ export class AudioBus {
   private unlocked = false;
   private ambientStarted = false;
   private ambientTimer: number | null = null;
+  private ambientBellTimer: number | null = null;
+  private suspendedByPage = false;
   private chordIndex = 0;
   private _muted = false;
   private _masterVol = 0.85;
@@ -52,17 +54,22 @@ export class AudioBus {
   }
 
   unlock(): void {
-    if (this.unlocked) return;
+    if (this.unlocked && this.ctx?.state === 'running') return;
     try {
-      const Ctor =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new Ctor();
-      this.master = this.ctx.createGain();
-      this.master.connect(this.ctx.destination);
-      this.musicGain = this.ctx.createGain();
-      this.musicGain.connect(this.master);
-      this.applyGains();
+      if (!this.ctx) {
+        const Ctor =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        this.ctx = new Ctor();
+        this.master = this.ctx.createGain();
+        this.master.connect(this.ctx.destination);
+        this.musicGain = this.ctx.createGain();
+        this.musicGain.connect(this.master);
+        this.applyGains();
+      }
+      if (this.ctx.state === 'suspended') {
+        void this.ctx.resume();
+      }
       this.unlocked = true;
       this.startAmbient();
     } catch {
@@ -96,70 +103,89 @@ export class AudioBus {
     lfoGain.connect(droneGain.gain);
     lfo.start();
 
-    const scheduleChord = () => {
-      if (!this.ctx || !this.musicGain) {
-        this.ambientTimer = window.setTimeout(scheduleChord, 4000);
-        return;
-      }
-      const chords = [
-        [220.0, 277.18, 329.63],
-        [196.0, 246.94, 293.66],
-        [174.61, 220.0, 261.63],
-        [164.81, 207.65, 246.94],
-      ];
-      const notes = chords[this.chordIndex % chords.length];
-      this.chordIndex++;
-      const t0 = this.ctx.currentTime;
-      const hold = 7.5;
+    this.scheduleAmbientChord();
+  }
 
-      for (let i = 0; i < notes.length; i++) {
+  private scheduleAmbientChord(): void {
+    if (this.suspendedByPage) return;
+    if (!this.ctx || !this.musicGain) {
+      this.ambientTimer = window.setTimeout(() => this.scheduleAmbientChord(), 4000);
+      return;
+    }
+    const chords = [
+      [220.0, 277.18, 329.63],
+      [196.0, 246.94, 293.66],
+      [174.61, 220.0, 261.63],
+      [164.81, 207.65, 246.94],
+    ];
+    const notes = chords[this.chordIndex % chords.length];
+    this.chordIndex++;
+    const t0 = this.ctx.currentTime;
+    const hold = 7.5;
+
+    for (let i = 0; i < notes.length; i++) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      const filter = this.ctx.createBiquadFilter();
+      osc.type = i === 0 ? 'triangle' : 'sine';
+      osc.frequency.value = notes[i] * (1 + (Math.random() - 0.5) * 0.002);
+      filter.type = 'lowpass';
+      filter.frequency.value = 1100;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.09 - i * 0.015, t0 + 1.6);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + hold);
+      osc.connect(filter);
+      filter.connect(g);
+      g.connect(this.musicGain);
+      osc.start(t0);
+      osc.stop(t0 + hold + 0.1);
+    }
+
+    if (Math.random() < 0.55) {
+      const delay = 1.2 + Math.random() * 3;
+      this.ambientBellTimer = window.setTimeout(() => {
+        if (this.suspendedByPage || !this.ctx || !this.musicGain) return;
+        const t = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const g = this.ctx.createGain();
-        const filter = this.ctx.createBiquadFilter();
-        osc.type = i === 0 ? 'triangle' : 'sine';
-        osc.frequency.value = notes[i] * (1 + (Math.random() - 0.5) * 0.002);
-        filter.type = 'lowpass';
-        filter.frequency.value = 1100;
-        g.gain.setValueAtTime(0.0001, t0);
-        g.gain.exponentialRampToValueAtTime(0.09 - i * 0.015, t0 + 1.6);
-        g.gain.exponentialRampToValueAtTime(0.0001, t0 + hold);
-        osc.connect(filter);
-        filter.connect(g);
+        osc.type = 'sine';
+        const base = notes[2] * 2;
+        osc.frequency.value = base * (Math.random() < 0.5 ? 1 : 1.5);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.055, t + 0.05);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+        osc.connect(g);
         g.connect(this.musicGain);
-        osc.start(t0);
-        osc.stop(t0 + hold + 0.1);
-      }
+        osc.start(t);
+        osc.stop(t + 2.3);
+      }, delay * 1000);
+    }
 
-      if (Math.random() < 0.55) {
-        const delay = 1.2 + Math.random() * 3;
-        window.setTimeout(() => {
-          if (!this.ctx || !this.musicGain) return;
-          const t = this.ctx.currentTime;
-          const osc = this.ctx.createOscillator();
-          const g = this.ctx.createGain();
-          osc.type = 'sine';
-          const base = notes[2] * 2;
-          osc.frequency.value = base * (Math.random() < 0.5 ? 1 : 1.5);
-          g.gain.setValueAtTime(0.0001, t);
-          g.gain.exponentialRampToValueAtTime(0.055, t + 0.05);
-          g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
-          osc.connect(g);
-          g.connect(this.musicGain);
-          osc.start(t);
-          osc.stop(t + 2.3);
-        }, delay * 1000);
-      }
-
-      this.ambientTimer = window.setTimeout(scheduleChord, hold * 1000 * 0.95);
-    };
-
-    scheduleChord();
+    this.ambientTimer = window.setTimeout(() => this.scheduleAmbientChord(), hold * 1000 * 0.95);
   }
 
   stopAmbient(): void {
     if (this.ambientTimer != null) {
       window.clearTimeout(this.ambientTimer);
       this.ambientTimer = null;
+    }
+    if (this.ambientBellTimer != null) {
+      window.clearTimeout(this.ambientBellTimer);
+      this.ambientBellTimer = null;
+    }
+  }
+
+  /** Pause generative music while the tab is hidden; resume on return. */
+  setPageHidden(hidden: boolean): void {
+    this.suspendedByPage = hidden;
+    if (hidden) {
+      this.stopAmbient();
+      if (this.ctx && this.ctx.state === 'running') void this.ctx.suspend();
+      return;
+    }
+    if (this.ctx && this.ctx.state === 'suspended') void this.ctx.resume();
+    if (this.unlocked && this.ambientStarted && this.ambientTimer == null) {
+      this.scheduleAmbientChord();
     }
   }
 

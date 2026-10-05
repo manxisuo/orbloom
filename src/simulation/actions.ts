@@ -1,6 +1,7 @@
 import type { GameWorldState, PlantSpecies, PlantState, Vec3Like } from '../shared/types';
-import { cloneV3, copyV3, mulberry32, nextId, normalize, v3 } from '../shared/math';
+import { angularDistance, cloneV3, copyV3, mulberry32, nextId, normalize, v3 } from '../shared/math';
 import { terrainHeightAt } from '../shared/terrain';
+import { lakeShoreRadius } from '../shared/lakeShape';
 import { ang, randomTangentSafe } from './helpers';
 import { makeFox, makeRabbit } from './systems/lifecycle';
 import { pushLog } from './log';
@@ -33,6 +34,16 @@ export function makePlantForEvent(species: PlantSpecies, normal: Vec3Like, growt
   return makePlant(species, normal, growth);
 }
 
+/** Check if a point is inside any lake. */
+function isInLake(localNormal: Vec3Like, lakes: import('../shared/types').LakeCenter[]): boolean {
+  for (const lake of lakes) {
+    const dist = angularDistance(localNormal, lake.normal);
+    const shoreRadius = lakeShoreRadius(lake, localNormal);
+    if (dist < shoreRadius * 0.85) return true;
+  }
+  return false;
+}
+
 export function plantTreeAt(
   world: GameWorldState,
   localNormal: Vec3Like,
@@ -41,6 +52,8 @@ export function plantTreeAt(
   const cost = species === 'tree' ? 5 : species === 'grass' ? 2 : species === 'mushroom' ? 4 : 3;
   if (world.resources.stardust < cost) return { ok: false, reason: 'stardust' };
   if (world.plants.length > 400) return { ok: false, reason: 'cap' };
+
+  if (isInLake(localNormal, world.planet.lakes)) return { ok: false, reason: 'water' };
 
   // Trees need more space; grass can pack tighter
   const minAng = species === 'tree' ? 0.1 : species === 'mushroom' ? 0.07 : 0.05;

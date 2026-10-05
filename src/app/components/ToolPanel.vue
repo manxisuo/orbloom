@@ -17,13 +17,14 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
 </script>
 
 <template>
-  <aside class="hud tool-panel">
+  <aside class="hud tool-panel" aria-label="值日工具">
     <div class="panel-title tool-title">值日工具</div>
     <div class="tool-scroll">
       <button
         class="tool-btn inspect-btn"
         :class="{ active: store.tool === 'inspect' }"
-        title="只查看，不建造"
+        title="只查看，不建造（快捷键 1）"
+        aria-label="观察工具，快捷键 1"
         @click="emit('pick', 'inspect')"
       >
         <span class="tool-label">观察</span>
@@ -33,8 +34,10 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
         v-for="t in tools"
         :key="t.id"
         class="tool-btn"
-        :class="{ active: store.tool === t.id }"
-        :title="t.hint"
+        :class="{ active: store.tool === t.id, unaffordable: t.cost != null && store.stardust < t.cost }"
+        :title="t.cost != null && store.stardust < t.cost ? `星尘不足（需 ${t.cost}）` : t.hint"
+        :aria-label="`${t.label}，${t.hint}`"
+        :disabled="t.cost != null && store.stardust < t.cost"
         @click="emit('pick', t.id)"
       >
         <span class="tool-label">{{ t.label }}</span>
@@ -42,16 +45,17 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
       </button>
       <button
         class="tool-btn rain-btn"
-        :disabled="store.rainCooldown > 0"
-        :title="`滋润湖泊，消耗 ${RAIN_COST} 星尘`"
+        :class="{ unaffordable: store.stardust < RAIN_COST }"
+        :disabled="store.rainCooldown > 0 || store.stardust < RAIN_COST"
+        :title="store.stardust < RAIN_COST ? `星尘不足（需 ${RAIN_COST}）` : `滋润湖泊，消耗 ${RAIN_COST} 星尘`"
         @click="emit('rain')"
       >
-        <span>{{ store.rainCooldown > 0 ? `冷却 ${Math.ceil(store.rainCooldown)}s` : '降雨' }}</span>
+        <span>{{ store.rainCooldown > 0 ? `冷却 ${Math.ceil(store.rainCooldown / Math.max(1, store.speed))}s` : '降雨' }}</span>
         <span class="tool-cost rain-cost"><span class="cost-dot" />{{ RAIN_COST }}</span>
       </button>
     </div>
     <p class="hint desktop-hint">
-      拖动甩动星球（带惯性）<br />滚轮缩放<br />点击表面执行工具<br />每 45 秒自动存档
+      拖动甩动星球（带惯性）<br />滚轮缩放 · 方向键也可转<br />1–7 选工具 · 空格暂停 · R 降雨<br />每 45 秒自动存档
     </p>
   </aside>
 </template>
@@ -120,8 +124,10 @@ const tools: { id: ToolMode; label: string; hint: string; cost?: number }[] = [
   justify-content: center;
   gap: 8px;
 }
-.rain-btn:disabled {
-  opacity: 0.5;
+.rain-btn:disabled,
+.tool-btn:disabled,
+.tool-btn.unaffordable {
+  opacity: 0.42;
   cursor: default;
 }
 .rain-cost {

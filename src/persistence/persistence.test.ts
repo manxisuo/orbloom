@@ -71,6 +71,17 @@ describe('SaveRepository (memory adapter)', () => {
     expect(loaded!.world.wishesCompleted).toBe(2);
   });
 
+  it('inspectLatest reports a corrupt payload instead of hiding it', async () => {
+    const repo = memoryRepo();
+    await (repo as unknown as { storage: MemoryStorageAdapter }).storage.set(
+      'orbloom:save:autosave',
+      { not: 'a-save' },
+    );
+    const inspected = await repo.inspectLatest();
+    expect(inspected.status).toBe('corrupt');
+    expect(await repo.loadLatest()).toBeNull();
+  });
+
   it('rejects newer schema versions', async () => {
     const repo = memoryRepo();
     const world = createWorld(3);

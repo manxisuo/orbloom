@@ -105,6 +105,18 @@ const SPIN_DAMP_Y = 1.6;
 const SPIN_DAMP_X = 2.0;
 
 export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: number): void {
+  // Integrate spin with damping using REAL time — drag and rotation work even when paused
+  const planet = world.planet;
+  planet.spinVelY = Math.max(-SPIN_MAX_Y, Math.min(SPIN_MAX_Y, planet.spinVelY || 0));
+  planet.spinVelX = Math.max(-SPIN_MAX_X, Math.min(SPIN_MAX_X, planet.spinVelX || 0));
+  planet.rotationY += planet.spinVelY * dtReal;
+  planet.rotationX += planet.spinVelX * dtReal;
+  planet.rotationX = Math.max(-0.9, Math.min(0.9, planet.rotationX));
+  planet.spinVelY *= Math.exp(-SPIN_DAMP_Y * dtReal);
+  planet.spinVelX *= Math.exp(-SPIN_DAMP_X * dtReal);
+  if (Math.abs(planet.spinVelY) < 0.002) planet.spinVelY = 0;
+  if (Math.abs(planet.spinVelX) < 0.002) planet.spinVelX = 0;
+
   const speed = world.time.speed;
   if (speed <= 0) {
     return;
@@ -113,18 +125,6 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
   world.time.gameTime += dt;
   if (world.rainCooldown > 0) world.rainCooldown = Math.max(0, world.rainCooldown - dt);
   const rng = worldRng(world);
-
-  // Integrate spin with damping — drag sets velocity, release coasts
-  const planet = world.planet;
-  planet.spinVelY = Math.max(-SPIN_MAX_Y, Math.min(SPIN_MAX_Y, planet.spinVelY || 0));
-  planet.spinVelX = Math.max(-SPIN_MAX_X, Math.min(SPIN_MAX_X, planet.spinVelX || 0));
-  planet.rotationY += planet.spinVelY * dt;
-  planet.rotationX += planet.spinVelX * dt;
-  planet.rotationX = Math.max(-0.9, Math.min(0.9, planet.rotationX));
-  planet.spinVelY *= Math.exp(-SPIN_DAMP_Y * dt);
-  planet.spinVelX *= Math.exp(-SPIN_DAMP_X * dt);
-  if (Math.abs(planet.spinVelY) < 0.002) planet.spinVelY = 0;
-  if (Math.abs(planet.spinVelX) < 0.002) planet.spinVelX = 0;
 
   budget.animalDecision += dt;
   budget.plantTick += dt;
@@ -240,14 +240,14 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     maybeOfferEvent(world, step, rng);
 
     // Natural stardust trickle from healthy eco
-    const s = computeStats(plants, animals, planet.lakes, world.time.gameTime);
+    const s = computeStats(plants, animals, planet.lakes, world.time.gameTime, world.time.dayLength);
     world.stats = s;
     world.resources.stardust += s.stability * dtLakeDays * STARDUST_PER_DAY_PER_STABILITY;
 
-    // Cull withered grass/flowers
+    // Cull withered plants (including dead trees)
     for (let i = plants.length - 1; i >= 0; i--) {
       const p = plants[i];
-      if (p.species !== 'tree' && p.health <= 0.02 && p.growth <= 0.02) {
+      if (p.health <= 0.02 && p.growth <= 0.02) {
         plants.splice(i, 1);
       }
     }

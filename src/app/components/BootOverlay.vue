@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SaveMeta } from '../../persistence/types';
 
-defineProps<{ meta: SaveMeta | null; storageLabel: string }>();
+defineProps<{ meta: SaveMeta | null; storageLabel: string; loadError?: string | null }>();
 const emit = defineEmits<{ continue: []; 'new-game': [] }>();
 
 function formatTime(ts: number): string {
@@ -15,7 +15,12 @@ function formatTime(ts: number): string {
       <div class="boot-orb" />
       <h1>星球值日生</h1>
       <p class="boot-sub">Orbloom · 转动昼夜，照料你的微小世界</p>
-      <div v-if="meta" class="boot-save">
+      <div v-if="loadError" class="boot-save boot-error">
+        <div class="boot-save-title">存档无法读取</div>
+        <div class="boot-save-line">上次的星球没有被加载</div>
+        <div class="boot-save-meta">{{ loadError }}。开始新星球会覆盖这份损坏的存档。</div>
+      </div>
+      <div v-else-if="meta" class="boot-save">
         <div class="boot-save-title">发现存档</div>
         <div class="boot-save-line">{{ meta.label }}</div>
         <div class="boot-save-meta">
@@ -25,9 +30,9 @@ function formatTime(ts: number): string {
         </div>
       </div>
       <div class="boot-actions">
-        <button v-if="meta" class="boot-btn primary" @click="emit('continue')">继续值日</button>
-        <button class="boot-btn" @click="emit('new-game')">
-          {{ meta ? '新星球' : '开始值日' }}
+        <button v-if="meta && !loadError" class="boot-btn primary" @click="emit('continue')">继续值日</button>
+        <button class="boot-btn" :class="{ primary: !meta || !!loadError }" @click="emit('new-game')">
+          {{ meta || loadError ? '新星球' : '开始值日' }}
         </button>
       </div>
       <p class="boot-hint">存档介质：{{ storageLabel }}</p>
@@ -95,6 +100,10 @@ function formatTime(ts: number): string {
   margin-top: 4px;
   font-size: 11px;
   opacity: 0.65;
+}
+.boot-error {
+  border-color: rgba(230, 150, 150, 0.35);
+  background: rgba(80, 24, 28, 0.35);
 }
 .boot-actions {
   display: flex;

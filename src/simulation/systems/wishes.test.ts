@@ -68,6 +68,24 @@ describe('tickWishes', () => {
     expect(world.resources.stardust).toBe(50);
   });
 
+  it('extends the deadline while an event popup is open', () => {
+    const world = createWorld(1);
+    world.plants = [];
+    world.wish = { id: 'forestWish', startedAt: 0, deadline: 10, progress: 0 };
+    world.time.gameTime = 9;
+    world.pendingEvent = {
+      id: 'meteor',
+      title: '流星坠落',
+      body: '',
+      acceptLabel: 'a',
+      declineLabel: 'b',
+    };
+    tickWishes(world, 2);
+    expect(world.wish).not.toBeNull();
+    expect(world.wish!.deadline).toBe(12);
+    expect(world.wishesFailed).toBe(0);
+  });
+
   it('waits out the gap before offering the next wish', () => {
     const world = createWorld(1);
     world.plants = [];

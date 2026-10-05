@@ -12,10 +12,10 @@ const emit = defineEmits<{
 const store = useGameStore();
 
 const speeds = [
-  { v: 0, label: '⏸' },
-  { v: 1, label: '1×' },
-  { v: 2, label: '2×' },
-  { v: 4, label: '4×' },
+  { v: 0, label: '⏸', aria: '暂停' },
+  { v: 1, label: '1×', aria: '正常速度' },
+  { v: 2, label: '2×', aria: '两倍速' },
+  { v: 4, label: '4×', aria: '四倍速' },
 ];
 </script>
 
@@ -38,18 +38,20 @@ const speeds = [
       <span class="res-label">星尘</span>
     </div>
 
-    <button class="save-btn" :disabled="saving" @click="emit('save')">
+    <button class="save-btn" :disabled="saving" aria-label="手动存档" @click="emit('save')">
       {{ saving ? '存档中…' : '存档' }}
     </button>
-    <button class="save-btn" @click="emit('toggle-stats')">生态</button>
-    <button class="save-btn" @click="emit('toggle-settings')">设置</button>
+    <button class="save-btn" aria-label="打开或关闭生态面板" @click="emit('toggle-stats')">生态</button>
+    <button class="save-btn" aria-label="打开或关闭设置" @click="emit('toggle-settings')">设置</button>
 
-    <div class="speed-group">
+    <div class="speed-group" role="group" aria-label="模拟速度">
       <button
         v-for="s in speeds"
         :key="s.v"
         class="speed-btn"
         :class="{ active: store.speed === s.v }"
+        :aria-label="s.aria"
+        :aria-pressed="store.speed === s.v"
         @click="emit('set-speed', s.v)"
       >
         {{ s.label }}

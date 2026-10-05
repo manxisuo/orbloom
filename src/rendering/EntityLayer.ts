@@ -32,13 +32,18 @@ export class EntityLayer {
   private flowerList: PlantState[] = [];
   private beeList: AnimalState[] = [];
   private readonly GRASS_MAX = 512;
-  private readonly FLOWER_MAX = 256;
+  private readonly FLOWER_MAX = 512;
   private readonly BEE_MAX = 16;
   private tmpMat = new THREE.Matrix4();
   private tmpQuat = new THREE.Quaternion();
   private tmpPos = new THREE.Vector3();
   private tmpScale = new THREE.Vector3();
   private tmpColor = new THREE.Color();
+  private tmpColorB = new THREE.Color();
+  private tmpN = new THREE.Vector3();
+  private tmpFace = new THREE.Vector3();
+  private tmpRight = new THREE.Vector3();
+  private tmpBasis = new THREE.Matrix4();
   private up = new THREE.Vector3(0, 1, 0);
 
   // Shared geo/material + object pools (avoid alloc/churn on spawn/despawn)
@@ -285,15 +290,15 @@ export class EntityLayer {
     const white = this.tmpColor.setHex(0xffffff);
     for (let i = 0; i < count; i++) {
       const b = this.beeList[i];
-      const n = new THREE.Vector3(b.position.normal.x, b.position.normal.y, b.position.normal.z);
+      const n = this.tmpN.set(b.position.normal.x, b.position.normal.y, b.position.normal.z);
       const hop = Math.sin(b.hopPhase) * 0.012 + 0.02;
       this.tmpPos.copy(n).multiplyScalar(radius + terrainHeightAt(n.x, n.y, n.z) + hop + 0.05);
-      const face = new THREE.Vector3(b.facing.x, b.facing.y, b.facing.z);
+      const face = this.tmpFace.set(b.facing.x, b.facing.y, b.facing.z);
       if (face.lengthSq() > 1e-6) {
         const forward = face.projectOnPlane(n).normalize();
-        const right = new THREE.Vector3().crossVectors(n, forward).normalize();
-        const m = new THREE.Matrix4().makeBasis(right, n, forward);
-        this.tmpQuat.setFromRotationMatrix(m);
+        const right = this.tmpRight.crossVectors(n, forward).normalize();
+        this.tmpBasis.makeBasis(right, n, forward);
+        this.tmpQuat.setFromRotationMatrix(this.tmpBasis);
       } else {
         this.tmpQuat.setFromUnitVectors(this.up, n);
       }
@@ -393,8 +398,8 @@ export class EntityLayer {
     const max = kind === 'grass' ? this.GRASS_MAX : this.FLOWER_MAX;
     const count = Math.min(list.length, max);
     // Flowers keep baked vertex colors; only slight health desaturation via instanceColor
-    const healthy = this.tmpColor.setHex(kind === 'flower' ? 0xffffff : healthyHex);
-    const sick = new THREE.Color(kind === 'flower' ? 0xc8c090 : sickHex);
+    const healthyHexUse = kind === 'flower' ? 0xffffff : healthyHex;
+    const sickHexUse = kind === 'flower' ? 0xc8c090 : sickHex;
 
     for (let i = 0; i < count; i++) {
       const p = list[i];
@@ -404,14 +409,14 @@ export class EntityLayer {
       const ground = terrainHeightAt(nx, ny, nz);
       const alt = Math.max(p.position.altitude, ground) + 0.004;
       this.tmpPos.set(nx, ny, nz).multiplyScalar(radius + alt);
-      this.tmpQuat.setFromUnitVectors(this.up, this.tmpPos.clone().normalize());
+      this.tmpQuat.setFromUnitVectors(this.up, this.tmpN.copy(this.tmpPos).normalize());
       const s = Math.max(kind === 'flower' ? 0.7 : 0.55, (0.55 + p.growth * 0.9) * (0.8 + p.health * 0.2));
       this.tmpScale.setScalar(s);
       this.tmpMat.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
       mesh.setMatrixAt(i, this.tmpMat);
 
-      const c = sick.clone().lerp(healthy, p.health);
-      mesh.setColorAt(i, c);
+      this.tmpColorB.setHex(sickHexUse).lerp(this.tmpColor.setHex(healthyHexUse), p.health);
+      mesh.setColorAt(i, this.tmpColorB);
     }
 
     mesh.count = count;

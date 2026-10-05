@@ -79,11 +79,12 @@ export class PointerControls {
         const dy = e.clientY - this.lastY;
         this.lastX = e.clientX;
         this.lastY = e.clientY;
-        // Slightly higher threshold for finger taps
-        if (Math.abs(e.clientX - this.downX) + Math.abs(e.clientY - this.downY) > 8) {
+        // Don't count as drag until movement exceeds threshold
+        const totalMove = Math.abs(e.clientX - this.downX) + Math.abs(e.clientY - this.downY);
+        if (totalMove > 12) {
           this.dragMoved = true;
+          this.cbs.onRotate(dx, dy);
         }
-        this.cbs.onRotate(dx, dy);
       }
 
       // Mouse and touch: keep surface light/hover in sync with the finger/cursor

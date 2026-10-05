@@ -61,13 +61,16 @@ export class Game {
   private saving = false;
   private lastDayFraction = 0;
   private hadPendingEvent = false;
+  private speedBeforeEvent: number | null = null;
   private onBeforeUnload = () => {
     // Best-effort only: IndexedDB writes are async and may not finish on unload.
     // visibilitychange (below) is the reliable path; this is a last-ditch attempt.
     void this.saveNow('autosave');
   };
   private onVisibility = () => {
-    if (document.visibilityState === 'hidden') void this.saveNow('autosave');
+    const hidden = document.visibilityState === 'hidden';
+    audioBus.setPageHidden(hidden);
+    if (hidden) void this.saveNow('autosave');
   };
 
   constructor(
@@ -118,7 +121,13 @@ export class Game {
       this.renderer.render(dt);
       this.checkDayNightChime();
       const pending = !!this.world.pendingEvent;
-      if (pending && !this.hadPendingEvent) audioBus.eventOpen();
+      if (pending && !this.hadPendingEvent) {
+        audioBus.eventOpen();
+        if (this.world.time.speed > 0) {
+          this.speedBeforeEvent = this.world.time.speed;
+          this.world.time.speed = 0;
+        }
+      }
       this.hadPendingEvent = pending;
 
       this.autosaveAcc += dt;
@@ -232,6 +241,10 @@ export class Game {
   resolveEvent(accept: boolean): void {
     const result = resolvePendingEvent(this.world, accept);
     if (!result) return;
+    if (this.speedBeforeEvent != null) {
+      if (this.world.time.speed === 0) this.world.time.speed = this.speedBeforeEvent;
+      this.speedBeforeEvent = null;
+    }
     this.notify(result.message);
     if (accept) {
       this.renderer.playEventVfx(result.eventId, result.impact ?? null);
@@ -395,6 +408,7 @@ export class Game {
     }
     if (reason === 'cap') return '星球上植物太多了';
     if (reason === 'dense') return '这里太挤了，换一块空地';
+    if (reason === 'water') return '不能在湖面上种植';
     return '无法种植';
   }
 

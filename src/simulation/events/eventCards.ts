@@ -119,10 +119,13 @@ export const EVENT_DEFS: EventDef[] = [
         .filter((x) => x.d < 0.3 && x.p.growth > 0.1)
         .sort((a, b) => a.d - b.d)
         .slice(0, 3);
+      let planted = 0;
       for (let i = 0; i < 3; i++) {
+        if (world.plants.length >= 400) break;
         const jitter = randomOnSphere(v3(), rng);
         const p = makePlantForEvent(species, mix(n, jitter, 0.15));
         world.plants.push(p);
+        planted++;
       }
       for (const { p } of crowded) {
         p.growth = Math.max(0, p.growth - 0.12);
@@ -220,9 +223,14 @@ export const EVENT_DEFS: EventDef[] = [
       if (world.resources.stardust < cost) {
         return { message: '星尘不足，无法为它种下树苗。' };
       }
+      if (world.plants.length >= 400) {
+        return { message: '星球太挤了，树苗无处扎根。' };
+      }
       world.resources.stardust -= cost;
       const n = randomOnSphere(v3(), rng);
+      let planted = 0;
       for (let i = 0; i < 3; i++) {
+        if (world.plants.length >= 400) break;
         const jitter = randomOnSphere(v3(), rng);
         const mixed = normalize(
           v3(),
@@ -233,12 +241,14 @@ export const EVENT_DEFS: EventDef[] = [
           ),
         );
         world.plants.push(makePlantForEvent('tree', mixed, 0.15 + rng() * 0.1));
+        planted++;
       }
       world.delayedEvents.push({
         kind: 'whisperGift',
         fireAt: world.time.gameTime + world.time.dayLength * 1.8,
       });
-      return { message: '三株新树扎根了。星球发出满足的轻响。', impact: n };
+      const msg = planted === 3 ? '三株新树扎根了' : `${planted} 株新树扎根了`;
+      return { message: `${msg}。星球发出满足的轻响。`, impact: n };
     },
     decline() {
       return '低语渐渐散去。';
