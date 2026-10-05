@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, computed } from 'vue';
-import { Game, type SelectionInfo } from '../../game/Game';
+import type { Game, SelectionInfo } from '../../game/Game';
 import { useGameStore } from '../stores/gameStore';
 import type { ToolMode, EventId } from '../../shared/types';
 import { createSaveRepository } from '../../persistence';
@@ -69,6 +69,7 @@ const lastSavedLabel = ref('');
 const fatalError = ref('');
 const loadError = ref('');
 const confirmNewPlanet = ref(false);
+const engineReady = ref(false);
 
 onMounted(async () => {
   loadAudioPrefs();
@@ -99,6 +100,7 @@ onMounted(async () => {
   }
 
   try {
+    const { Game } = await import('../../game/Game');
     game = new Game(canvas, (world, hover, selection) => {
     let hoverLight = 0;
     let hoverWater = 0;
@@ -164,6 +166,7 @@ onMounted(async () => {
     fatalError.value = err instanceof Error ? err.message : '无法初始化 3D 渲染。';
     return;
   }
+  engineReady.value = true;
 
   game.setTool(store.tool);
   const savedQ = localStorage.getItem('orbloom:quality') as 'low' | 'medium' | 'high' | null;
@@ -406,6 +409,14 @@ async function manualSave() {
   <div class="game-shell">
     <canvas ref="canvasRef" class="game-canvas" />
 
+    <div v-if="!engineReady && !fatalError" class="fatal-overlay" aria-live="polite">
+      <div class="fatal-card">
+        <div class="boot-orb loading-orb" />
+        <h1>正在唤醒星球</h1>
+        <p>加载三维引擎与星空……</p>
+      </div>
+    </div>
+
     <div v-if="fatalError" class="fatal-overlay">
       <div class="fatal-card">
         <h1>无法启动 3D 渲染</h1>
@@ -540,6 +551,26 @@ async function manualSave() {
 .fatal-hint {
   opacity: 0.55 !important;
   font-size: 12px !important;
+}
+.loading-orb {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #b8f0c8, #3d8fd1 55%, #1a3a5c);
+  box-shadow: 0 0 24px rgba(100, 180, 255, 0.4);
+  animation: orb-pulse 1.6s ease-in-out infinite;
+}
+@keyframes orb-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.06);
+    filter: brightness(1.15);
+  }
 }
 
 .panel-title {
