@@ -32,7 +32,7 @@ export class EntityLayer {
   private flowerList: PlantState[] = [];
   private beeList: AnimalState[] = [];
   private readonly GRASS_MAX = 512;
-  private readonly FLOWER_MAX = 256;
+  private readonly FLOWER_MAX = 512;
   private readonly BEE_MAX = 16;
   private tmpMat = new THREE.Matrix4();
   private tmpQuat = new THREE.Quaternion();
