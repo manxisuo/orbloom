@@ -30,19 +30,19 @@ const logFilters = [
 <template>
   <aside class="hud stats-panel" :class="{ 'stats-open': open }">
     <div class="panel-title">生态状态</div>
-    <div class="stat-row">
+    <div class="stat-row" title="整颗星球当前的昼夜亮度。白天偏满，夜里剩月光，不跟鼠标指到的那一点走。">
       <span>日照</span>
       <div class="bar"><i :style="{ width: `${Math.round(globalLight * 100)}%` }" /></div>
     </div>
-    <div class="stat-row">
+    <div class="stat-row" title="植物体内水分与湖泊水位的综合。靠近湖、降雨会升高，干旱和烈日会蒸发。">
       <span>水分</span>
       <div class="bar water"><i :style="{ width: `${Math.round(store.stats.averageWater * 100)}%` }" /></div>
     </div>
-    <div class="stat-row">
+    <div class="stat-row" title="植物平均健康。缺光、缺水、寒冷或被啃食会下降，授粉和照料会回升。">
       <span>健康</span>
       <div class="bar health"><i :style="{ width: `${Math.round(store.stats.averageHealth * 100)}%` }" /></div>
     </div>
-    <div class="stat-row">
+    <div class="stat-row" title="生态是否平衡：植物数量、健康、水分、湖水和少量动物权重。过空或过挤都会偏低。">
       <span>稳定</span>
       <div class="bar stable"><i :style="{ width: `${Math.round(store.stats.stability * 100)}%` }" /></div>
     </div>
