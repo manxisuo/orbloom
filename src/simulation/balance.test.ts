@@ -158,9 +158,7 @@ function playthrough() {
   const playerRng = mulberry32(SEED ^ 0x9e3779b9);
   const dayLength = world.time.dayLength;
   const totalSeconds = DAYS * dayLength;
-  // Model the core loop: keep the planet turning one revolution per day so every
-  // location cycles through day/dusk/night instead of being constantly sunlit.
-  const spinPerSecond = (Math.PI * 2) / dayLength;
+  // Self-spin already turns one revolution per game day; do not add extra drag.
 
   const rows: string[] = [];
   const eventStats = new Map<EventId, EventStat>();
@@ -169,8 +167,6 @@ function playthrough() {
   let dayMark = 0;
 
   for (let t = 0; t < totalSeconds; t += DT) {
-    world.planet.spinVelY = spinPerSecond;
-    world.planet.spinVelX = 0;
     tickWorld(world, budget, DT);
 
     if (world.pendingEvent) {

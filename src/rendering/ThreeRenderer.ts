@@ -185,7 +185,6 @@ export class ThreeRenderer {
     this.planet.applyPersonality(world.personality ?? 'wild');
     this.lastPersonality = world.personality ?? 'wild';
     this.lastMushroomGlow = this.countMushroomGlow(plants);
-    this.lighting.setDayFraction(world.stats.dayFraction ?? 0);
 
     this.entities.sync(world);
     this.updateSelectionRing(plants, animals);

@@ -7,14 +7,8 @@ const emit = defineEmits<{ replay: []; close: [] }>();
 
 const store = useGameStore();
 
-/** Global daylight from the solar clock — not the hovered surface point. */
-const globalLight = computed(() => {
-  const f = store.stats.dayFraction;
-  if (f < 0.35) return 0.92 - (f / 0.35) * 0.08;
-  if (f < 0.5) return 0.84 - ((f - 0.35) / 0.15) * 0.4;
-  if (f < 0.85) return 0.38 + Math.sin(((f - 0.5) / 0.35) * Math.PI) * 0.05;
-  return 0.38 + ((f - 0.85) / 0.15) * 0.5;
-});
+/** Average plant sun from the shared sun + planet orientation — not the hover point. */
+const globalLight = computed(() => store.stats.sunlight ?? 0.5);
 
 const logFilters = [
   { id: 'all' as const, label: '全部' },
@@ -30,7 +24,7 @@ const logFilters = [
 <template>
   <aside class="hud stats-panel" :class="{ 'stats-open': open }">
     <div class="panel-title">生态状态</div>
-    <div class="stat-row" title="整颗星球当前的昼夜亮度。白天偏满，夜里剩月光，不跟鼠标指到的那一点走。">
+    <div class="stat-row" title="植物当前平均接到的日照，和画面是同一套朝向光源。向阳面偏高，背光面偏低；不转也会随星球慢自转变化。">
       <span>日照</span>
       <div class="bar"><i :style="{ width: `${Math.round(globalLight * 100)}%` }" /></div>
     </div>

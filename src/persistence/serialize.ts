@@ -17,6 +17,7 @@ export function worldToSave(world: GameWorldState, id = 'autosave', label?: stri
     structured.planet.lakes,
     structured.time.gameTime,
     structured.time.dayLength,
+    { rotationX: structured.planet.rotationX, rotationY: structured.planet.rotationY },
   );
 
   const meta: SaveMeta = {
