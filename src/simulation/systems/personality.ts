@@ -11,6 +11,8 @@ const PERSONALITY_LABEL: Record<string, string> = {
   chaos: '混沌',
 };
 
+const PERSONALITY_COOLDOWN_DAYS = 0.5;
+
 export function updatePersonality(world: GameWorldState): void {
   const plants = world.plants;
   const animals = world.animals;
@@ -26,6 +28,7 @@ export function updatePersonality(world: GameWorldState): void {
   const rabbits = animals.filter((a) => a.species === 'rabbit').length;
   const stressed = plants.filter((p) => p.health < 0.35).length / total;
   const machines = world.modifiers.machineScore ?? 0;
+  const bees = animals.filter((a) => a.species === 'bee').length;
 
   let next: typeof world.personality = 'wild';
   if (stressed > 0.45 || (foxes >= 2 && rabbits < 4)) next = 'chaos';
@@ -34,11 +37,15 @@ export function updatePersonality(world: GameWorldState): void {
   else if (avgLake < 0.2 && trees < 4) next = 'desert';
   else if (trees >= 10 && avgLake > 0.35) next = 'forest';
   else if (flowers >= 8 && avgHealth > 0.55) next = 'garden';
-  else if (grass + flowers > trees * 2 && animals.filter((a) => a.species === 'bee').length >= 2) {
-    next = 'garden';
-  } else if (trees < 3 && grass < 12) next = 'wild';
+  else if (grass + flowers > trees * 2 && bees >= 2) next = 'garden';
+  else if (trees < 3 && grass < 12) next = 'wild';
 
   if (next !== world.personality) {
+    // Hysteresis: require cooldown period before switching to prevent flip-flopping
+    const lastChange = (world as { _personalityChangeAt?: number })._personalityChangeAt ?? -Infinity;
+    const cooldown = PERSONALITY_COOLDOWN_DAYS * world.time.dayLength;
+    if (world.time.gameTime - lastChange < cooldown) return;
+    (world as { _personalityChangeAt?: number })._personalityChangeAt = world.time.gameTime;
     world.personality = next;
     pushLog(world, `星球性情渐显：${PERSONALITY_LABEL[next] ?? next}星球。`, 'personality');
   }
