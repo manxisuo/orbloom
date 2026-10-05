@@ -244,10 +244,10 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     world.stats = s;
     world.resources.stardust += s.stability * dtLakeDays * STARDUST_PER_DAY_PER_STABILITY;
 
-    // Cull withered grass/flowers
+    // Cull withered plants (including dead trees)
     for (let i = plants.length - 1; i >= 0; i--) {
       const p = plants[i];
-      if (p.species !== 'tree' && p.health <= 0.02 && p.growth <= 0.02) {
+      if (p.health <= 0.02 && p.growth <= 0.02) {
         plants.splice(i, 1);
       }
     }
