@@ -142,12 +142,23 @@ function failWish(world: GameWorldState, def: WishDef): void {
 /**
  * Advance the wish loop by `dt` game-seconds. Called from the eco tick.
  * Offer a wish when idle, otherwise track progress and resolve it.
+ * When an event popup is open, the wish deadline is extended so the player
+ * doesn't lose time while deciding.
  */
 export function tickWishes(world: GameWorldState, dt: number): void {
+  // Pause wish timer while event popup is open
+  const eventOpen = !!world.pendingEvent;
+
   if (!world.wish) {
-    world.nextWishIn -= dt;
-    if (world.nextWishIn <= 0) offerWish(world);
+    if (!eventOpen) {
+      world.nextWishIn -= dt;
+      if (world.nextWishIn <= 0) offerWish(world);
+    }
     return;
+  }
+  // Extend deadline while event popup is open so player doesn't lose time
+  if (eventOpen) {
+    world.wish.deadline += dt;
   }
   const def = findWishDef(world.wish.id);
   world.wish.progress = wishProgress(world, def.condition);
