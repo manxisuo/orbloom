@@ -395,6 +395,7 @@ export class Game {
     }
     if (reason === 'cap') return '星球上植物太多了';
     if (reason === 'dense') return '这里太挤了，换一块空地';
+    if (reason === 'water') return '不能在湖面上种植';
     return '无法种植';
   }
 
