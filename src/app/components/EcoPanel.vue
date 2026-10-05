@@ -1,10 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useGameStore } from '../stores/gameStore';
 
 defineProps<{ open: boolean }>();
 const emit = defineEmits<{ replay: []; close: [] }>();
 
 const store = useGameStore();
+
+/** Global daylight from the solar clock — not the hovered surface point. */
+const globalLight = computed(() => {
+  const f = store.stats.dayFraction;
+  if (f < 0.35) return 0.92 - (f / 0.35) * 0.08;
+  if (f < 0.5) return 0.84 - ((f - 0.35) / 0.15) * 0.4;
+  if (f < 0.85) return 0.38 + Math.sin(((f - 0.5) / 0.35) * Math.PI) * 0.05;
+  return 0.38 + ((f - 0.85) / 0.15) * 0.5;
+});
 
 const logFilters = [
   { id: 'all' as const, label: '全部' },
@@ -22,7 +32,7 @@ const logFilters = [
     <div class="panel-title">生态状态</div>
     <div class="stat-row">
       <span>日照</span>
-      <div class="bar"><i :style="{ width: `${Math.round(store.hoverLight * 100)}%` }" /></div>
+      <div class="bar"><i :style="{ width: `${Math.round(globalLight * 100)}%` }" /></div>
     </div>
     <div class="stat-row">
       <span>水分</span>
