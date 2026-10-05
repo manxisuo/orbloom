@@ -52,17 +52,22 @@ export class AudioBus {
   }
 
   unlock(): void {
-    if (this.unlocked) return;
+    if (this.unlocked && this.ctx?.state === 'running') return;
     try {
-      const Ctor =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new Ctor();
-      this.master = this.ctx.createGain();
-      this.master.connect(this.ctx.destination);
-      this.musicGain = this.ctx.createGain();
-      this.musicGain.connect(this.master);
-      this.applyGains();
+      if (!this.ctx) {
+        const Ctor =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        this.ctx = new Ctor();
+        this.master = this.ctx.createGain();
+        this.master.connect(this.ctx.destination);
+        this.musicGain = this.ctx.createGain();
+        this.musicGain.connect(this.master);
+        this.applyGains();
+      }
+      if (this.ctx.state === 'suspended') {
+        void this.ctx.resume();
+      }
       this.unlocked = true;
       this.startAmbient();
     } catch {
