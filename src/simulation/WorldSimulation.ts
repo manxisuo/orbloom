@@ -240,7 +240,7 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     maybeOfferEvent(world, step, rng);
 
     // Natural stardust trickle from healthy eco
-    const s = computeStats(plants, animals, planet.lakes, world.time.gameTime);
+    const s = computeStats(plants, animals, planet.lakes, world.time.gameTime, world.time.dayLength);
     world.stats = s;
     world.resources.stardust += s.stability * dtLakeDays * STARDUST_PER_DAY_PER_STABILITY;
 
