@@ -1,5 +1,5 @@
 import type { Vec3Like } from '../../shared/types';
-import { normalize, v3 } from '../../shared/math';
+import { localToWorldNormal, normalize, v3 } from '../../shared/math';
 
 /** Fixed sun direction in world space (unit). */
 export const SUN_DIRECTION: Vec3Like = normalize(v3(), v3(1, 0.25, 0.55));
@@ -14,6 +14,25 @@ export function lightAmount(worldNormal: Vec3Like, sunDir: Vec3Like = SUN_DIRECT
   const d =
     worldNormal.x * sunDir.x + worldNormal.y * sunDir.y + worldNormal.z * sunDir.z;
   return Math.max(0, d);
+}
+
+/** 0..1 wrap of Y spin — one full turn is one solar day of self-rotation. */
+export function solarPhase(rotationY: number): number {
+  const t = rotationY / (Math.PI * 2);
+  return t - Math.floor(t);
+}
+
+/**
+ * Sunlight a local-space surface normal receives after the planet's orientation
+ * is applied. Same transform the simulation and the renderer use.
+ */
+export function orientedLight(
+  localNormal: Vec3Like,
+  rotationX: number,
+  rotationY: number,
+  sunDir: Vec3Like = SUN_DIRECTION,
+): number {
+  return lightAmount(localToWorldNormal(v3(), localNormal, rotationX, rotationY), sunDir);
 }
 
 export function lightBand(amount: number): LightBand {

@@ -2,23 +2,17 @@ import * as THREE from 'three';
 import { SUN_DIRECTION } from '../simulation/climate/light';
 
 /**
- * Scene lighting: sun/fill/ambient lights, the sun disc, and the slow
- * day→dusk→night→dawn color cycle driven by the current day fraction.
+ * Scene lighting: a fixed world-space sun matching SUN_DIRECTION.
+ * Day and night come from the planet rotating under this sun — the same
+ * orientation the simulation uses for plant/animal light — not a global
+ * clock that grades the whole scene to night.
  */
 export class Lighting {
   readonly sunLight: THREE.DirectionalLight;
   readonly ambientLight: THREE.AmbientLight;
   readonly fillLight: THREE.DirectionalLight;
-  private sunVisual: THREE.Mesh;
-  private dayFraction = 0;
-  private sunCol = new THREE.Color();
-  private ambCol = new THREE.Color();
-  private fillCol = new THREE.Color();
-  private colA = new THREE.Color();
-  private colB = new THREE.Color();
 
   constructor(scene: THREE.Scene) {
-    // Lights — colors are rewritten every frame by update()
     this.ambientLight = new THREE.AmbientLight(0x6a7aaa, 0.22);
     scene.add(this.ambientLight);
 
@@ -40,15 +34,13 @@ export class Lighting {
     this.fillLight.position.set(-4, 1, -3);
     scene.add(this.fillLight);
 
-    // Sun disc
-    this.sunVisual = new THREE.Mesh(
+    const sunVisual = new THREE.Mesh(
       new THREE.SphereGeometry(0.18, 16, 16),
       new THREE.MeshBasicMaterial({ color: 0xffe6a8 }),
     );
-    this.sunVisual.position.copy(SUN_DIRECTION).multiplyScalar(8);
-    scene.add(this.sunVisual);
+    sunVisual.position.copy(SUN_DIRECTION).multiplyScalar(8);
+    scene.add(sunVisual);
 
-    // Soft sun glow sprite-ish plane
     const glow = new THREE.Mesh(
       new THREE.SphereGeometry(0.45, 16, 16),
       new THREE.MeshBasicMaterial({
@@ -58,7 +50,7 @@ export class Lighting {
         depthWrite: false,
       }),
     );
-    glow.position.copy(this.sunVisual.position);
+    glow.position.copy(sunVisual.position);
     scene.add(glow);
   }
 
@@ -72,69 +64,6 @@ export class Lighting {
     }
   }
 
-  setDayFraction(fraction: number): void {
-    this.dayFraction = fraction;
-  }
-
-  /**
-   * Slow mood cycle on the whole scene: warm noon → amber dusk → cool night → soft dawn.
-   * Day length is ~45s of game time, so this breathes with play sessions.
-   */
-  update(dt: number): void {
-    const f = this.dayFraction;
-    // Piecewise key colors (sun rgb / sun intensity / ambient rgb / ambient intensity / fill)
-    // 0 day, 0.4 dusk, 0.55 night, 0.85 dawn
-    let sunInt: number;
-    let ambInt: number;
-    let fillInt: number;
-
-    if (f < 0.35) {
-      const t = f / 0.35;
-      this.sunCol.copy(this.colA.set(0xfff2d5)).lerp(this.colB.set(0xffc48a), t * 0.55);
-      sunInt = 1.35;
-      this.ambCol.copy(this.colA.set(0x6a7aaa)).lerp(this.colB.set(0x8a8090), t * 0.4);
-      ambInt = 0.22;
-      this.fillCol.set(0x88a0ff);
-      fillInt = 0.15;
-    } else if (f < 0.5) {
-      const t = (f - 0.35) / 0.15;
-      this.sunCol.copy(this.colA.set(0xffc48a)).lerp(this.colB.set(0xff8a50), t);
-      sunInt = 1.35 - t * 0.45;
-      this.ambCol.copy(this.colA.set(0x8a8090)).lerp(this.colB.set(0x5a5070), t);
-      ambInt = 0.22 + t * 0.04;
-      this.fillCol.copy(this.colA.set(0x88a0ff)).lerp(this.colB.set(0x6a70c0), t);
-      fillInt = 0.15 + t * 0.08;
-    } else if (f < 0.85) {
-      const t = (f - 0.5) / 0.35;
-      // Night: cool moonlight
-      this.sunCol.set(0x9ab0e8);
-      sunInt = 0.55 + Math.sin(t * Math.PI) * 0.08;
-      this.ambCol.set(0x4a5578);
-      ambInt = 0.18;
-      this.fillCol.set(0x6a88c8);
-      fillInt = 0.22;
-    } else {
-      const t = (f - 0.85) / 0.15;
-      this.sunCol.copy(this.colA.set(0x9ab0e8)).lerp(this.colB.set(0xffd0a0), t);
-      sunInt = 0.55 + t * 0.8;
-      this.ambCol.copy(this.colA.set(0x4a5578)).lerp(this.colB.set(0x7a88b0), t);
-      ambInt = 0.18 + t * 0.04;
-      this.fillCol.copy(this.colA.set(0x6a88c8)).lerp(this.colB.set(0x88a0ff), t);
-      fillInt = 0.22 - t * 0.07;
-    }
-
-    const k = 1 - Math.exp(-3 * dt);
-    this.sunLight.color.lerp(this.sunCol, k);
-    this.sunLight.intensity += (sunInt - this.sunLight.intensity) * k;
-    this.ambientLight.color.lerp(this.ambCol, k);
-    this.ambientLight.intensity += (ambInt - this.ambientLight.intensity) * k;
-    this.fillLight.color.lerp(this.fillCol, k);
-    this.fillLight.intensity += (fillInt - this.fillLight.intensity) * k;
-
-    // Sun disc follows the same temperature
-    const sunMat = this.sunVisual.material as THREE.MeshBasicMaterial;
-    sunMat.color.lerp(this.sunCol, k);
-    sunMat.opacity = 0.85;
-    sunMat.transparent = true;
-  }
+  /** Sun stays put; the terminator is the planet's orientation. */
+  update(_dt: number): void {}
 }

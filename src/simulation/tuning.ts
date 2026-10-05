@@ -12,6 +12,11 @@
 /** Real seconds for one full solar day on a new planet. */
 export const DAY_LENGTH = 60;
 
+/** Radians of Y self-spin per game-second for a given day length (one rev / day). */
+export function planetSelfSpinRate(dayLength: number): number {
+  return (Math.PI * 2) / Math.max(1, dayLength);
+}
+
 /** Rain action cooldown, in game-days. */
 export const RAIN_COOLDOWN_DAYS = 0.25;
 

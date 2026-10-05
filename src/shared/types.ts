@@ -58,7 +58,7 @@ export interface LakeCenter {
 
 export interface PlanetState {
   radius: number;
-  /** Radians around Y; integrated from spin velocity. */
+  /** Radians around Y; slow self-spin plus player drag offset. */
   rotationY: number;
   rotationX: number;
   /** Angular velocity (rad/s) — drag sets this, damping coasts it down. */
@@ -87,8 +87,11 @@ export interface EcoStats {
   animalCount: number;
   /** 0..1 rough stability score */
   stability: number;
+  /** 0..1 solar phase from Y spin (same orientation plants use for sun). */
   dayFraction: number;
   day: number;
+  /** Average plant sunlight from the shared sun + planet orientation. */
+  sunlight: number;
 };
 
 export type LogKind = 'life' | 'plant' | 'animal' | 'event' | 'weather' | 'personality' | 'wish';

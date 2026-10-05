@@ -16,7 +16,13 @@ import { makeRabbit, maybeRabbitLife, maybeSpawnBees, maybeSpawnFoxes } from './
 import { maybeOfferEvent, tickDelayedEvents } from './systems/events';
 import { updatePersonality } from './systems/personality';
 import { tickWishes } from './systems/wishes';
-import { DAY_LENGTH, EVENT_FIRST_DAYS, STARDUST_PER_DAY_PER_STABILITY, WISH_FIRST_DAYS } from './tuning';
+import {
+  DAY_LENGTH,
+  EVENT_FIRST_DAYS,
+  STARDUST_PER_DAY_PER_STABILITY,
+  WISH_FIRST_DAYS,
+  planetSelfSpinRate,
+} from './tuning';
 
 const tmpWorld = v3();
 
@@ -63,7 +69,10 @@ export function createWorld(seed = 42): GameWorldState {
     animals,
     resources: { stardust: 30 },
     time: { gameTime: 0, speed: 1, dayLength: DAY_LENGTH },
-    stats: computeStats(plants, animals, lakes, 0),
+    stats: computeStats(plants, animals, lakes, 0, DAY_LENGTH, {
+      rotationX: 0.15,
+      rotationY: 0.4,
+    }),
     log: [
       {
         id: 'log_start',
@@ -123,6 +132,8 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
   }
   const dt = dtReal * speed;
   world.time.gameTime += dt;
+  // One revolution per game day; player drag (spinVel, real time) is extra offset.
+  planet.rotationY += planetSelfSpinRate(world.time.dayLength) * dt;
   if (world.rainCooldown > 0) world.rainCooldown = Math.max(0, world.rainCooldown - dt);
   const rng = worldRng(world);
 
@@ -240,7 +251,10 @@ export function tickWorld(world: GameWorldState, budget: SimBudget, dtReal: numb
     maybeOfferEvent(world, step, rng);
 
     // Natural stardust trickle from healthy eco
-    const s = computeStats(plants, animals, planet.lakes, world.time.gameTime, world.time.dayLength);
+    const s = computeStats(plants, animals, planet.lakes, world.time.gameTime, world.time.dayLength, {
+      rotationX: planet.rotationX,
+      rotationY: planet.rotationY,
+    });
     world.stats = s;
     world.resources.stardust += s.stability * dtLakeDays * STARDUST_PER_DAY_PER_STABILITY;
 

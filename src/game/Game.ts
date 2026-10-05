@@ -21,6 +21,7 @@ import { findEventDef, toPending } from '../simulation/events/eventCards';
 import { ThreeRenderer } from '../rendering/ThreeRenderer';
 import type { SaveRepository } from '../persistence/SaveRepository';
 import type { SaveMeta } from '../persistence/types';
+import { solarPhase } from '../simulation/climate/light';
 import { audioBus } from './audio';
 
 export type HoverInfo =
@@ -102,6 +103,7 @@ export class Game {
       onClick: (hit) => this.handleClick(hit),
     });
     this.renderer.syncWorld(this.world);
+    this.lastDayFraction = solarPhase(this.world.planet.rotationY);
     window.addEventListener('beforeunload', this.onBeforeUnload);
     document.addEventListener('visibilitychange', this.onVisibility);
   }
@@ -219,10 +221,15 @@ export class Game {
   }
 
   private checkDayNightChime(): void {
-    const f = this.world.stats.dayFraction;
-    // Crossing into day (~0) or night (~0.5)
-    if (this.lastDayFraction < 0.5 && f >= 0.5) audioBus.nightChime();
-    if (this.lastDayFraction > 0.5 && f <= 0.5) audioBus.dayChime();
+    const f = solarPhase(this.world.planet.rotationY);
+    const prev = this.lastDayFraction;
+    const delta = Math.abs(f - prev);
+    const wrapped = (prev > 0.8 && f < 0.2) || (prev < 0.2 && f > 0.8);
+    // Ignore large jumps from a fast drag so a flick does not spam chimes.
+    if (delta < 0.12 || wrapped) {
+      if (prev < 0.5 && f >= 0.5) audioBus.nightChime();
+      if (prev > 0.5 && f <= 0.5) audioBus.dayChime();
+    }
     this.lastDayFraction = f;
   }
 

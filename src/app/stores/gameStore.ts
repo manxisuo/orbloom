@@ -34,6 +34,7 @@ export const useGameStore = defineStore('game', () => {
     stability: 0,
     dayFraction: 0,
     day: 1,
+    sunlight: 0.5,
   });
   const log = ref<LogEntry[]>([]);
   /** Full chronological log for replay firsts (HUD log is only a recent window). */
