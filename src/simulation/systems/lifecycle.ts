@@ -65,8 +65,26 @@ export function makeFox(rng: () => number): AnimalState {
 
 export function maybeSpawnBees(world: GameWorldState, rng: () => number): void {
   const bees = world.animals.filter((a) => a.species === 'bee');
-  if (bees.length >= 6) return;
   const flowers = world.plants.filter((p) => p.species === 'flower' && p.growth >= 0.4 && p.health >= 0.4);
+
+  // Bees leave when flowers are scarce
+  if (flowers.length < 2 && bees.length > 0) {
+    for (let i = world.animals.length - 1; i >= 0; i--) {
+      const a = world.animals[i];
+      if (a.species === 'bee') {
+        a.hunger = Math.min(1, a.hunger + 0.15);
+        if (a.hunger >= 0.95) {
+          world.animals.splice(i, 1);
+          if (world.animals.filter((x) => x.species === 'bee').length === 0) {
+            pushLog(world, '花儿凋零，蜜蜂离开了。', 'animal');
+          }
+        }
+      }
+    }
+    return;
+  }
+
+  if (bees.length >= 6) return;
   if (flowers.length < 2) return;
   // Roughly one bee per 3 mature flowers, spawn slowly
   const want = Math.min(6, Math.floor(flowers.length / 3) + 1);
