@@ -19,6 +19,7 @@ export class PlanetBody {
   private baseHeights = new Float32Array(0);
   private baseNormals = new Float32Array(0);
   private lastPaintKey = '';
+  private lastLakeGeoKey = '';
   private lakeMeshes: THREE.Mesh[] = [];
 
   constructor(renderer: THREE.WebGLRenderer) {
@@ -250,9 +251,13 @@ export class PlanetBody {
       this.group.add(mesh);
       this.lakeMeshes.push(mesh);
     }
+    const geoKey = lakes.map((l) => `${l.water.toFixed(3)}`).join('|');
+    const rebuild = geoKey !== this.lastLakeGeoKey;
+    if (rebuild) this.lastLakeGeoKey = geoKey;
+
     lakes.forEach((lake, i) => {
       const mesh = this.lakeMeshes[i];
-      this.writeLakeGeometry(mesh, lake);
+      if (rebuild) this.writeLakeGeometry(mesh, lake);
       const mat = mesh.material as THREE.MeshStandardMaterial;
       mat.opacity = 0.3 + lake.water * 0.45;
       mesh.visible = lake.water > 0.02;
