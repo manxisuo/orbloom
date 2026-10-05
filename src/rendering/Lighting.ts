@@ -11,6 +11,11 @@ export class Lighting {
   readonly fillLight: THREE.DirectionalLight;
   private sunVisual: THREE.Mesh;
   private dayFraction = 0;
+  private sunCol = new THREE.Color();
+  private ambCol = new THREE.Color();
+  private fillCol = new THREE.Color();
+  private colA = new THREE.Color();
+  private colB = new THREE.Color();
 
   constructor(scene: THREE.Scene) {
     // Lights — colors are rewritten every frame by update()
@@ -79,59 +84,56 @@ export class Lighting {
     const f = this.dayFraction;
     // Piecewise key colors (sun rgb / sun intensity / ambient rgb / ambient intensity / fill)
     // 0 day, 0.4 dusk, 0.55 night, 0.85 dawn
-    let sunCol: THREE.Color;
     let sunInt: number;
-    let ambCol: THREE.Color;
     let ambInt: number;
-    let fillCol: THREE.Color;
     let fillInt: number;
 
     if (f < 0.35) {
       const t = f / 0.35;
-      sunCol = new THREE.Color(0xfff2d5).lerp(new THREE.Color(0xffc48a), t * 0.55);
+      this.sunCol.copy(this.colA.set(0xfff2d5)).lerp(this.colB.set(0xffc48a), t * 0.55);
       sunInt = 1.35;
-      ambCol = new THREE.Color(0x6a7aaa).lerp(new THREE.Color(0x8a8090), t * 0.4);
+      this.ambCol.copy(this.colA.set(0x6a7aaa)).lerp(this.colB.set(0x8a8090), t * 0.4);
       ambInt = 0.22;
-      fillCol = new THREE.Color(0x88a0ff);
+      this.fillCol.set(0x88a0ff);
       fillInt = 0.15;
     } else if (f < 0.5) {
       const t = (f - 0.35) / 0.15;
-      sunCol = new THREE.Color(0xffc48a).lerp(new THREE.Color(0xff8a50), t);
+      this.sunCol.copy(this.colA.set(0xffc48a)).lerp(this.colB.set(0xff8a50), t);
       sunInt = 1.35 - t * 0.45;
-      ambCol = new THREE.Color(0x8a8090).lerp(new THREE.Color(0x5a5070), t);
+      this.ambCol.copy(this.colA.set(0x8a8090)).lerp(this.colB.set(0x5a5070), t);
       ambInt = 0.22 + t * 0.04;
-      fillCol = new THREE.Color(0x88a0ff).lerp(new THREE.Color(0x6a70c0), t);
+      this.fillCol.copy(this.colA.set(0x88a0ff)).lerp(this.colB.set(0x6a70c0), t);
       fillInt = 0.15 + t * 0.08;
     } else if (f < 0.85) {
       const t = (f - 0.5) / 0.35;
       // Night: cool moonlight
-      sunCol = new THREE.Color(0x9ab0e8);
+      this.sunCol.set(0x9ab0e8);
       sunInt = 0.55 + Math.sin(t * Math.PI) * 0.08;
-      ambCol = new THREE.Color(0x4a5578);
+      this.ambCol.set(0x4a5578);
       ambInt = 0.18;
-      fillCol = new THREE.Color(0x6a88c8);
+      this.fillCol.set(0x6a88c8);
       fillInt = 0.22;
     } else {
       const t = (f - 0.85) / 0.15;
-      sunCol = new THREE.Color(0x9ab0e8).lerp(new THREE.Color(0xffd0a0), t);
+      this.sunCol.copy(this.colA.set(0x9ab0e8)).lerp(this.colB.set(0xffd0a0), t);
       sunInt = 0.55 + t * 0.8;
-      ambCol = new THREE.Color(0x4a5578).lerp(new THREE.Color(0x7a88b0), t);
+      this.ambCol.copy(this.colA.set(0x4a5578)).lerp(this.colB.set(0x7a88b0), t);
       ambInt = 0.18 + t * 0.04;
-      fillCol = new THREE.Color(0x6a88c8).lerp(new THREE.Color(0x88a0ff), t);
+      this.fillCol.copy(this.colA.set(0x6a88c8)).lerp(this.colB.set(0x88a0ff), t);
       fillInt = 0.22 - t * 0.07;
     }
 
     const k = 1 - Math.exp(-3 * dt);
-    this.sunLight.color.lerp(sunCol, k);
+    this.sunLight.color.lerp(this.sunCol, k);
     this.sunLight.intensity += (sunInt - this.sunLight.intensity) * k;
-    this.ambientLight.color.lerp(ambCol, k);
+    this.ambientLight.color.lerp(this.ambCol, k);
     this.ambientLight.intensity += (ambInt - this.ambientLight.intensity) * k;
-    this.fillLight.color.lerp(fillCol, k);
+    this.fillLight.color.lerp(this.fillCol, k);
     this.fillLight.intensity += (fillInt - this.fillLight.intensity) * k;
 
     // Sun disc follows the same temperature
     const sunMat = this.sunVisual.material as THREE.MeshBasicMaterial;
-    sunMat.color.lerp(sunCol, k);
+    sunMat.color.lerp(this.sunCol, k);
     sunMat.opacity = 0.85;
     sunMat.transparent = true;
   }
