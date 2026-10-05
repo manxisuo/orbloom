@@ -1,0 +1,23 @@
+{
+  "name": "星球值日生 · Orbloom",
+  "short_name": "星球值日生",
+  "description": "转动昼夜，照料属于你的微小星球生态。",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#070b18",
+  "theme_color": "#070b18",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
