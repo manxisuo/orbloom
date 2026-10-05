@@ -15,17 +15,18 @@ export function useTutorial() {
   let lastRotY = 0;
   let sawDaylight = false;
   let stepStartedAt = 0;
-  let peakPlantCount = 0;
+  let peakGrassGrowth = 0;
 
-  function init(isContinue: boolean) {
+  function init(isContinue: boolean, starterPlantCount = 0) {
     if (isContinue || localStorage.getItem(TUTORIAL_KEY)) {
       done.value = true;
       return;
     }
     done.value = false;
     step.value = 0;
-    basePlantCount = store.stats.plantCount;
-    peakPlantCount = basePlantCount;
+    // Use the live world count — store.stats is still 0 before the first UI sync.
+    basePlantCount = starterPlantCount;
+    peakGrassGrowth = 0;
     rotTravel = 0;
     lastRotY = 0;
     sawDaylight = false;
@@ -49,13 +50,20 @@ export function useTutorial() {
     }
   }
 
-  function tick(worldRotY: number, plantCount: number) {
+  function tick(info: {
+    rotY: number;
+    plantCount: number;
+    rabbitEating?: boolean;
+    grassGrowth?: number;
+  }) {
     if (done.value) return;
 
-    const dRot = Math.abs(worldRotY - lastRotY);
+    const dRot = Math.abs(info.rotY - lastRotY);
     if (dRot < Math.PI) rotTravel += dRot;
-    lastRotY = worldRotY;
-    if (plantCount > peakPlantCount) peakPlantCount = plantCount;
+    lastRotY = info.rotY;
+    if (info.grassGrowth != null && info.grassGrowth > peakGrassGrowth) {
+      peakGrassGrowth = info.grassGrowth;
+    }
 
     const s = step.value;
     if (s === 0) {
@@ -63,7 +71,7 @@ export function useTutorial() {
       return;
     }
     if (s === 1) {
-      if (plantCount > basePlantCount) advance(1);
+      if (info.plantCount > basePlantCount) advance(1);
       return;
     }
     if (s === 2) {
@@ -73,7 +81,10 @@ export function useTutorial() {
       return;
     }
     if (s === 3) {
-      const grazed = plantCount < peakPlantCount;
+      // Grazing lowers growth; it does not delete the plant.
+      const grazed =
+        !!info.rabbitEating ||
+        (info.grassGrowth != null && peakGrassGrowth > 0 && info.grassGrowth < peakGrassGrowth - 0.04);
       const elapsed = (performance.now() - stepStartedAt) / 1000;
       if (grazed || elapsed > 28 || store.stats.day > 1) advance(3);
     }

@@ -142,7 +142,14 @@ onMounted(async () => {
           }
         : null,
     });
-    tickTutorial(world.planet.rotationY, world.stats.plantCount);
+    tickTutorial({
+      rotY: world.planet.rotationY,
+      plantCount: world.stats.plantCount,
+      rabbitEating: world.animals.some((a) => a.species === 'rabbit' && a.state === 'eat'),
+      grassGrowth: world.plants
+        .filter((p) => p.species === 'grass')
+        .reduce((sum, p) => sum + p.growth, 0),
+    });
   }, {
     seed: 42,
     boot: loadedWorld ? { kind: 'loaded', world: loadedWorld } : { kind: 'new', seed: 42 },
@@ -170,7 +177,7 @@ onMounted(async () => {
     game.start();
     bootReady.value = false;
     store.setWorldReady(true);
-    initTutorial(false);
+    initTutorial(false, game.world.stats.plantCount);
   }
 
   // Auto-fit the eco/log panel to the viewport until the player toggles it.
@@ -297,7 +304,7 @@ function startNewGame() {
     game?.start();
     bootReady.value = false;
     store.setWorldReady(true);
-    initTutorial(false);
+    initTutorial(false, game?.world.stats.plantCount ?? 0);
     store.flash('新的星球苏醒了');
   };
   if (hasExistingSave.value) {
