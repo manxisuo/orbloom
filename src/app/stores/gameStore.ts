@@ -74,7 +74,9 @@ export const useGameStore = defineStore('game', () => {
       seen.add(e.id);
       out.push(e);
     };
-    const first = (pred: (e: LogEntry) => boolean) => push(log.value.find(pred));
+    // log.value is reversed (newest first), so use .slice().reverse() to search chronologically
+    const chronological = log.value.slice().reverse();
+    const first = (pred: (e: LogEntry) => boolean) => push(chronological.find(pred));
     first((e) => e.kind === 'plant' && e.text.includes('种下'));
     first((e) => e.text.includes('兔子来到了'));
     first((e) => e.text.includes('小生命'));
