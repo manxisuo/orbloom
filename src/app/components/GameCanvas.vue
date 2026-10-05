@@ -68,6 +68,7 @@ const saving = ref(false);
 const lastSavedLabel = ref('');
 const fatalError = ref('');
 const loadError = ref('');
+const confirmNewPlanet = ref(false);
 
 onMounted(async () => {
   loadAudioPrefs();
@@ -368,10 +369,16 @@ function startNewGame() {
     initTutorial(false, game?.world.stats.plantCount ?? 0);
     store.flash('新的星球苏醒了');
   };
-  if (hasExistingSave.value) {
-    if (!window.confirm('已有存档。开始新星球将覆盖自动存档，确定吗？')) return;
+  if (hasExistingSave.value && !confirmNewPlanet.value) {
+    confirmNewPlanet.value = true;
+    return;
   }
+  confirmNewPlanet.value = false;
   go();
+}
+
+function cancelNewPlanet() {
+  confirmNewPlanet.value = false;
 }
 
 function setQuality(level: 'low' | 'medium' | 'high') {
@@ -408,13 +415,24 @@ async function manualSave() {
     </div>
 
     <BootOverlay
-      v-if="bootReady"
+      v-if="bootReady && !confirmNewPlanet"
       :meta="existingMeta"
       :storage-label="storageLabel"
       :load-error="loadError || null"
       @continue="continueGame"
       @new-game="startNewGame"
     />
+
+    <div v-if="confirmNewPlanet" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-new-title">
+      <div class="confirm-card">
+        <h2 id="confirm-new-title">开始新星球？</h2>
+        <p>已有存档。新星球会覆盖自动存档，确定吗？</p>
+        <div class="confirm-actions">
+          <button class="tool-btn" @click="cancelNewPlanet">再想想</button>
+          <button class="tool-btn confirm-ok" @click="startNewGame">确定覆盖</button>
+        </div>
+      </div>
+    </div>
 
     <TopBar
       :personality-label="personalityLabel"
@@ -576,6 +594,48 @@ async function manualSave() {
 }
 .sel-row b {
   font-variant-numeric: tabular-nums;
+}
+
+.confirm-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 16;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 8, 20, 0.72);
+  backdrop-filter: blur(8px);
+  padding: 24px;
+}
+.confirm-card {
+  width: min(360px, 100%);
+  padding: 22px 20px 16px;
+  border-radius: 16px;
+  background: rgba(12, 18, 36, 0.95);
+  border: 1px solid rgba(150, 180, 230, 0.22);
+  text-align: center;
+}
+.confirm-card h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.confirm-card p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.55;
+  opacity: 0.8;
+}
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+.confirm-actions .tool-btn {
+  flex: 1;
+  justify-content: center;
+}
+.confirm-ok {
+  background: linear-gradient(135deg, #3d8fd1, #4caf82);
+  border-color: transparent;
+  font-weight: 600;
 }
 
 .notice {
