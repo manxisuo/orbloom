@@ -187,6 +187,8 @@ onMounted(async () => {
   stopDeviceWatch = watchDevice(({ narrow }) => {
     if (!statsUserToggled) showStats.value = !narrow;
   });
+
+  window.addEventListener('keydown', onKeydown);
 });
 
 function clearSelection() {
@@ -197,11 +199,67 @@ function clearSelection() {
 const { start: startReplay, stop: stopReplay, dispose: disposeReplay } = useReplay();
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown);
   stopDeviceWatch?.();
   disposeReplay();
   game?.dispose();
   game = null;
 });
+
+const KEY_TOOLS: Record<string, ToolMode> = {
+  Digit1: 'inspect',
+  Digit2: 'plant-tree',
+  Digit3: 'plant-grass',
+  Digit4: 'plant-flower',
+  Digit5: 'plant-mushroom',
+  Digit6: 'spawn-rabbit',
+  Digit7: 'spawn-fox',
+};
+
+function onKeydown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement | null;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    return;
+  }
+  if (fatalError.value || !store.worldReady) return;
+  if (store.replayOpen) return;
+
+  if (e.code === 'Space') {
+    e.preventDefault();
+    setSpeed(store.speed === 0 ? 1 : 0);
+    return;
+  }
+  if (e.code === 'KeyR') {
+    e.preventDefault();
+    castRain();
+    return;
+  }
+  const tool = KEY_TOOLS[e.code];
+  if (tool) {
+    e.preventDefault();
+    pickTool(tool);
+    return;
+  }
+  if (e.code === 'ArrowLeft') {
+    e.preventDefault();
+    game?.rotatePlanet(-10, 0);
+    return;
+  }
+  if (e.code === 'ArrowRight') {
+    e.preventDefault();
+    game?.rotatePlanet(10, 0);
+    return;
+  }
+  if (e.code === 'ArrowUp') {
+    e.preventDefault();
+    game?.rotatePlanet(0, -8);
+    return;
+  }
+  if (e.code === 'ArrowDown') {
+    e.preventDefault();
+    game?.rotatePlanet(0, 8);
+  }
+}
 
 function speciesName(s: string) {
   return s === 'tree' ? '树木' : s === 'grass' ? '草地' : s === 'mushroom' ? '发光蘑菇' : '花朵';
