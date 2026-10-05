@@ -67,6 +67,7 @@ const storageLabel = ref(repo.backendName);
 const saving = ref(false);
 const lastSavedLabel = ref('');
 const fatalError = ref('');
+const loadError = ref('');
 
 onMounted(async () => {
   loadAudioPrefs();
@@ -80,14 +81,20 @@ onMounted(async () => {
 
   let loadedWorld: import('../../shared/types').GameWorldState | null = null;
   try {
-    const latest = await repo.loadLatest();
-    if (latest) {
+    const inspected = await repo.inspectLatest();
+    if (inspected.status === 'ok') {
       hasExistingSave.value = true;
-      existingMeta.value = latest.meta;
-      loadedWorld = latest.world;
+      existingMeta.value = inspected.save.meta;
+      loadedWorld = inspected.save.world;
+    } else if (inspected.status === 'corrupt') {
+      loadError.value = inspected.error;
+      hasExistingSave.value = false;
+      loadedWorld = null;
     }
-  } catch {
-    // Storage may be unavailable — still allow new game.
+  } catch (err) {
+    loadError.value = err instanceof Error ? err.message : '存档数据损坏';
+    hasExistingSave.value = false;
+    loadedWorld = null;
   }
 
   try {
@@ -156,7 +163,7 @@ onMounted(async () => {
     quality.value = game.renderer.getQuality();
   }
 
-  if (hasExistingSave.value) {
+  if (hasExistingSave.value || loadError.value) {
     game.setSpeed(0);
     bootReady.value = true;
   } else {
@@ -270,6 +277,7 @@ function setSpeed(v: number) {
 
 function continueGame() {
   if (!game) return;
+  loadError.value = '';
   game.setSpeed(1);
   store.setSpeed(1);
   game.start();
@@ -282,6 +290,7 @@ function continueGame() {
 function startNewGame() {
   if (!game) return;
   const go = () => {
+    loadError.value = '';
     game?.newGame();
     game?.setSpeed(1);
     store.setSpeed(1);
@@ -334,6 +343,7 @@ async function manualSave() {
       v-if="bootReady"
       :meta="existingMeta"
       :storage-label="storageLabel"
+      :load-error="loadError || null"
       @continue="continueGame"
       @new-game="startNewGame"
     />
