@@ -101,7 +101,14 @@ export class ThreeRenderer {
   }
 
   private defaultQuality(): 'low' | 'medium' | 'high' {
-    return isMobileExperience() ? 'medium' : 'high';
+    if (isMobileExperience()) return 'medium';
+    const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 8 : 8;
+    const mem =
+      typeof navigator !== 'undefined'
+        ? (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+        : undefined;
+    if (cores <= 4 || (mem != null && mem <= 4)) return 'medium';
+    return 'high';
   }
 
   setQuality(level: 'low' | 'medium' | 'high'): void {
