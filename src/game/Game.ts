@@ -67,7 +67,9 @@ export class Game {
     void this.saveNow('autosave');
   };
   private onVisibility = () => {
-    if (document.visibilityState === 'hidden') void this.saveNow('autosave');
+    const hidden = document.visibilityState === 'hidden';
+    audioBus.setPageHidden(hidden);
+    if (hidden) void this.saveNow('autosave');
   };
 
   constructor(
