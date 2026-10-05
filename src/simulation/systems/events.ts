@@ -48,7 +48,9 @@ export function tickDelayedEvents(world: GameWorldState): void {
     if (ev.kind === 'birdGift') {
       const n = randomOnSphere(v3(), rng);
       const species: PlantSpecies = rng() < 0.5 ? 'flower' : 'grass';
+      let planted = 0;
       for (let k = 0; k < 3; k++) {
+        if (world.plants.length >= 400) break;
         const jitter = randomOnSphere(v3(), rng);
         const mixed = normalize(
           v3(),
@@ -59,8 +61,13 @@ export function tickDelayedEvents(world: GameWorldState): void {
           ),
         );
         world.plants.push(makePlantForEvent(species, mixed, 0.25 + rng() * 0.2));
+        planted++;
       }
-      pushLog(world, '候鸟如约归来，留下了远方的种子。', 'event');
+      if (planted > 0) {
+        pushLog(world, '候鸟如约归来，留下了远方的种子。', 'event');
+      } else {
+        pushLog(world, '候鸟如约归来，但星球太挤了，种子无处落脚。', 'event');
+      }
     } else if (ev.kind === 'whisperGift') {
       world.resources.stardust += 8;
       let healed = 0;
